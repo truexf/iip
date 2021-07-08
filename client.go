@@ -68,7 +68,7 @@ func (m *Client) NewChannel() (*ClientChannel, error) {
 		return nil, err
 	}
 	if resp.ChannelId > 0 && resp.Code == 0 {
-		c := &ClientChannel{internalChannel: conn.newChannel(m.config.ChannelPacketQueueLen), client: m}
+		c := &ClientChannel{internalChannel: conn.newChannel(false, m.config.ChannelPacketQueueLen), client: m}
 		c.client.SetCtxData(CtxClient, m)
 		return c, nil
 	} else {
@@ -86,6 +86,7 @@ func (m *Client) newConnection() (*Connection, error) {
 	if err != nil {
 		return nil, err
 	}
+	ret.SetCtxData(CtxClient, m)
 
 	tcpConn.SetKeepAlive(true)
 	tcpConn.SetKeepAlivePeriod(time.Second * 15)

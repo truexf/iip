@@ -1,3 +1,8 @@
+// Copyright 2021 fangyousong(方友松). All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
+//通用性函数与类型定义
 package iip
 
 import (
@@ -49,6 +54,9 @@ func (m *DefaultContext) GetCtxData(key string) interface{} {
 	}
 	m.ctxLock.RLock()
 	defer m.ctxLock.RUnlock()
+	if m.ctx == nil {
+		m.ctx = make(map[string]interface{})
+	}
 	if ret, ok := m.ctx[key]; ok {
 		return ret
 	}
@@ -61,6 +69,9 @@ func (m *DefaultContext) SetCtxData(key string, value interface{}) {
 	}
 	m.ctxLock.Lock()
 	defer m.ctxLock.Unlock()
+	if m.ctx == nil {
+		m.ctx = make(map[string]interface{})
+	}
 	m.ctx[key] = value
 }
 
@@ -70,5 +81,8 @@ func (m *DefaultContext) RemoveCtxData(key string) {
 	}
 	m.ctxLock.Lock()
 	defer m.ctxLock.Unlock()
+	if m.ctx == nil {
+		m.ctx = make(map[string]interface{})
+	}
 	delete(m.ctx, key)
 }

@@ -13,6 +13,7 @@ import (
 	"math"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -157,6 +158,7 @@ type Channel struct {
 	ReceivedQueue    chan *Packet //received streamed packet from peer side
 	PacketStatus     byte         //recent received packet status
 	closeNotify      chan int
+	closeLock        uint32
 }
 
 func (m *Channel) SendPacket(pkt *Packet) error {
@@ -303,7 +305,7 @@ func (m *Channel) handleServerLoop() {
 func (m *Channel) handleClientLoop() {
 	// merge 1 or 1+ packet into an whole response
 	var pktWholeResponse *Packet
-	handler := m.Conn.GetCtxData(CtxServer).(*Server).handler
+	handler := m.Conn.GetCtxData(CtxClient).(*Client).handler
 	for {
 		select {
 		case <-m.closeNotify:
@@ -340,6 +342,10 @@ func (m *Channel) handleClientLoop() {
 }
 
 func (m *Channel) Close(err error) {
+	if !atomic.CompareAndSwapUint32(&m.closeLock, 0, 1) {
+		return
+	}
+	defer atomic.StoreUint32(&m.closeLock, 0)
 	m.SendPacket(&Packet{Type: 8, ChannelId: m.Id, channel: m})
 	m.Conn.removeChannel(m)
 	if err != nil {
@@ -362,6 +368,7 @@ type Connection struct {
 	tcpConn       *net.TCPConn
 	tcpWriteQueue chan *Packet
 	closeNotify   chan int
+	closeLock     uint32
 }
 
 func NewConnection(netConn *net.TCPConn, role byte, writeQueueLen int) (*Connection, error) {
@@ -376,7 +383,7 @@ func NewConnection(netConn *net.TCPConn, role byte, writeQueueLen int) (*Connect
 		tcpWriteQueue: make(chan *Packet, writeQueueLen),
 		closeNotify:   make(chan int, 1),
 	}
-	ret.newSysChannel()
+	ret.newChannel(true, 100)
 	if role == RoleClient {
 		go ret.clientReadLoop()
 	} else {
@@ -402,6 +409,10 @@ func (m *Connection) writeLoop() {
 }
 
 func (m *Connection) Close(err error) {
+	if !atomic.CompareAndSwapUint32(&m.closeLock, 0, 1) {
+		return
+	}
+	defer atomic.StoreUint32(&m.closeLock, 0)
 	if err != nil {
 		m.err = err
 	} else {
@@ -420,7 +431,10 @@ func (m *Connection) Close(err error) {
 	for _, v := range m.Channels {
 		v.Close(fmt.Errorf("connection is closed"))
 	}
-	close(m.closeNotify)
+	if m.closeNotify != nil {
+		close(m.closeNotify)
+		m.closeNotify = nil
+	}
 }
 
 func (m *Connection) makeNewChannelId() uint32 {
@@ -443,34 +457,27 @@ func (m *Connection) makeNewChannelId() uint32 {
 	return 0
 }
 
-func (m *Connection) newChannel(queueLen uint32) *Channel {
+func (m *Connection) newChannel(sys bool, queueLen uint32) *Channel {
 	ret := &Channel{
-		Id:            m.makeNewChannelId(),
+		Id:            0,
 		NewTime:       time.Now(),
 		Conn:          m,
 		ReceivedQueue: make(chan *Packet, queueLen),
 		PacketStatus:  255,
+		closeNotify:   make(chan int, 1),
 	}
+	if !sys {
+		ret.Id = m.makeNewChannelId()
+	}
+
 	m.ChannelsLock.Lock()
 	defer m.ChannelsLock.Unlock()
 	m.Channels[ret.Id] = ret
 	if m.Role == RoleServer {
+		ret.SetCtxData(CtxServer, m.GetCtxData(CtxServer))
 		go ret.handleServerLoop()
 	} else if m.Role == RoleClient {
-		go ret.handleClientLoop()
-	}
-
-	return ret
-}
-
-func (m *Connection) newSysChannel() *Channel {
-	ret := &Channel{Id: 0, NewTime: time.Now(), Conn: m, ReceivedQueue: make(chan *Packet, 10), PacketStatus: 255}
-	m.ChannelsLock.Lock()
-	defer m.ChannelsLock.Unlock()
-	m.Channels[0] = ret
-	if m.Role == RoleServer {
-		go ret.handleServerLoop()
-	} else if m.Role == RoleClient {
+		ret.SetCtxData(CtxClient, m.GetCtxData(CtxClient))
 		go ret.handleClientLoop()
 	}
 

@@ -103,7 +103,7 @@ func (m *serverHandler) Handle(request *Packet, dataCompleted bool) ([]byte, err
 	}
 	switch request.Path {
 	case PathNewChannel:
-		c := request.channel.Conn.newChannel(100)
+		c := request.channel.Conn.newChannel(false, 100)
 		bts, _ := json.Marshal(&ResponseNewChannel{Code: 0, ChannelId: c.Id})
 		return bts, nil
 	case PathDeleteChannel:
