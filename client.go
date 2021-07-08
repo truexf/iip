@@ -1,3 +1,8 @@
+// Copyright 2021 fangyousong(方友松). All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
+//客户端实现
 package iip
 
 import (
@@ -9,13 +14,13 @@ import (
 )
 
 type ClientConfig struct {
-	MaxConnections        int
-	MaxChannelsPerConn    int
-	ChannelPacketQueueLen uint32
-	TcpWriteQueueLen      uint32
-	TcpConnectTimeout     time.Duration
-	TcpReadBufferSize     int
-	TcpWriteBufferSize    int
+	MaxConnections        int           //单client最大连接数
+	MaxChannelsPerConn    int           //单connection最大channel数
+	ChannelPacketQueueLen uint32        //channel的packet接收队列长度
+	TcpWriteQueueLen      uint32        //connection的packet写队列长度
+	TcpConnectTimeout     time.Duration //服务器连接超时限制
+	TcpReadBufferSize     int           //内核socket读缓冲区大小
+	TcpWriteBufferSize    int           //内核socket写缓冲区大小
 }
 
 type Client struct {
@@ -33,6 +38,7 @@ type ClientChannel struct {
 	client          *Client
 }
 
+//创建一个新的client
 func NewClient(config ClientConfig, serverAddr string) (*Client, error) {
 	ret := &Client{
 		config:      config,
@@ -43,6 +49,9 @@ func NewClient(config ClientConfig, serverAddr string) (*Client, error) {
 	return ret, nil
 }
 
+//创建一个新的channel
+//每个connection会默认建立一个ID为0的信道，用于基础通讯功能，创建一个新的channel就是通过这个0号channel实现的：
+//创建channel的流程由client发起，服务器返回新创建的channel id，后续的业务通讯（request/response）应该在新创建的channel上进行
 func (m *Client) NewChannel() (*ClientChannel, error) {
 	conn, err := m.getFreeConnection()
 	if err != nil {
@@ -109,7 +118,7 @@ func (m *Client) getFreeConnection() (*Connection, error) {
 	return conn, err
 }
 
-//对于"消息式"请求/响应（系统自动将多个部分的响应数据合成为一个完整的响应，并通过这个阻塞的函数返回）
+//用于"消息式"请求/响应（系统自动将多个部分的响应数据合成为一个完整的响应，并通过这个阻塞的函数返回）
 func (m *ClientChannel) DoRequest(path string, requestData []byte, timeout time.Duration) ([]byte, error) {
 	if m.internalChannel != nil && m.internalChannel.err != nil {
 		return nil, fmt.Errorf("this channel is invalid, [%s]", m.internalChannel.err.Error())
@@ -151,7 +160,7 @@ func (m *ClientChannel) DoRequest(path string, requestData []byte, timeout time.
 	return nil, ErrUnknown
 }
 
-//对于流式请求/响应（用户自己注册处理Handler，每接收到一部分响应数据，系统会调用Handler一次，这个调用是异步的，发送函数立即返回）
+//用于于流式请求/响应（用户自己注册处理Handler，每接收到一部分响应数据，系统会调用Handler一次，这个调用是异步的，发送函数立即返回）
 func (m *ClientChannel) DoStreamRequest(path string, requestData []byte) error {
 	if m.internalChannel != nil && m.internalChannel.err != nil {
 		return fmt.Errorf("this channel is invalid, [%s]", m.internalChannel.err.Error())
@@ -171,16 +180,21 @@ func (m *ClientChannel) DoStreamRequest(path string, requestData []byte) error {
 	return nil
 }
 
+//关闭channel
 func (m *ClientChannel) Close(err error) {
 	if m.internalChannel != nil {
 		m.internalChannel.Close(err)
 	}
 }
 
+//注册Path-Handler
+//iip协议中包含一个path字段，该字段一般用来代表具体的服务器接口和资源
+//client和server通过注册对path的处理函数，以实现基于iip框架的开发
 func (m *Client) RegisterHandler(path string, handler PathHandler) error {
 	return m.handler.pathHandlerManager.registerHandler(path, handler)
 }
 
+//取消注册Path-Handler
 func (m *Client) UnRegisterHandler(path string) {
 	m.handler.pathHandlerManager.unRegisterHandler(path)
 }

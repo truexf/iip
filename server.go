@@ -1,3 +1,8 @@
+// Copyright 2021 fangyousong(方友松). All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
+//服务器实现
 package iip
 
 import (
@@ -70,6 +75,7 @@ func (m *Server) removeConn(addr string) {
 	delete(m.connections, addr)
 }
 
+//listen socket and start server process
 func (m *Server) StartListen() error {
 	lsn, err := net.Listen("tcp4", m.listenAddr)
 	if err != nil {
@@ -97,6 +103,7 @@ func (m *Server) StartListen() error {
 	return nil
 }
 
+//stop server
 func (m *Server) Stop(err error) {
 	log.Errorf("server stopped, %s", err.Error())
 	m.SetError(err)

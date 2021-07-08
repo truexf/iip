@@ -1,3 +1,8 @@
+// Copyright 2021 fangyousong(方友松). All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
+//各种处理器(Handler)定义
 package iip
 
 import (
@@ -34,6 +39,7 @@ func ErrorResponse(err *Error) *ResponseHandleFail {
 	return &ResponseHandleFail{Code: err.Code, Message: err.Message}
 }
 
+//管理PathHandler,从属于一个client或server
 type PathHandlerManager struct {
 	HanderMap map[string]PathHandler
 	sync.Mutex
@@ -76,10 +82,12 @@ func (m *PathHandlerManager) unRegisterHandler(path string) {
 	delete(m.HanderMap, path)
 }
 
+//packet handler接口
 type Handler interface {
 	Handle(request *Packet, dataCompleted bool) ([]byte, error)
 }
 
+//path-handler接口，PathHandler在packet-handler基础上执行，有serverHandler或clientHandler在Handle函数内部调用
 type PathHandler interface {
 	Handle(path string, requestData []byte, dataCompleted bool) ([]byte, error)
 }
@@ -95,7 +103,7 @@ func (m *serverHandler) Handle(request *Packet, dataCompleted bool) ([]byte, err
 	}
 	switch request.Path {
 	case PathNewChannel:
-		c := request.channel.Conn.newChannel(ChannelPacketQueueLen)
+		c := request.channel.Conn.newChannel(100)
 		bts, _ := json.Marshal(&ResponseNewChannel{Code: 0, ChannelId: c.Id})
 		return bts, nil
 	case PathDeleteChannel:

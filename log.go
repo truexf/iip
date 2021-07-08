@@ -1,3 +1,7 @@
+// Copyright 2021 fangyousong(方友松). All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
 //定义logger接口，并提供默认实现：输出到stdout,stderr
 package iip
 
