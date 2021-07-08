@@ -1,3 +1,4 @@
+//定义logger接口，并提供默认实现：输出到stdout,stderr
 package iip
 
 import (

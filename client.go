@@ -13,61 +13,76 @@ type ClientConfig struct {
 	MaxChannelsPerConn    int
 	ChannelPacketQueueLen uint32
 	TcpWriteQueueLen      uint32
-	TcpReadTimeout        time.Duration
-	TcpWriteTimeout       time.Duration
+	TcpConnectTimeout     time.Duration
+	TcpReadBufferSize     int
+	TcpWriteBufferSize    int
 }
 
 type Client struct {
+	DefaultErrorHolder
+	DefaultContext
 	config      ClientConfig
 	serverAddr  string
 	connections []*Connection
 	connLock    sync.Mutex
-	channels    map[uint32]*Channel
-	channelLock sync.Mutex
+	handler     *clientHandler
+}
+
+type ClientChannel struct {
+	internalChannel *Channel
+	client          *Client
 }
 
 func NewClient(config ClientConfig, serverAddr string) (*Client, error) {
-	ret := &Client{config: config, serverAddr: serverAddr, channels: make(map[uint32]*Connection), connections: make([]*Connection, 0)}
+	ret := &Client{
+		config:      config,
+		serverAddr:  serverAddr,
+		connections: make([]*Connection, 0),
+		handler:     &clientHandler{pathHandlerManager: &PathHandlerManager{}},
+	}
 	return ret, nil
 }
 
-func (m *Client) NewChannel() (uint32, error) {
+func (m *Client) NewChannel() (*ClientChannel, error) {
 	conn, err := m.getFreeConnection()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	bts, err := m.doRequest(nil, NewChannelPath, []byte("{}"), time.Second)
+	c := &ClientChannel{internalChannel: conn.Channels[0], client: m}
+	bts, err := c.DoRequest(PathNewChannel, []byte("{}"), time.Second)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	var resp ResponseNewChannel
 	if err := json.Unmarshal(bts, &resp); err != nil {
-		return 0, err
+		return nil, err
 	}
 	if resp.ChannelId > 0 && resp.Code == 0 {
-		m.channelLock.Lock()
-		m.channels[resp.ChannelId] = conn.newChannel(m.config.ChannelPacketQueueLen)
-		m.channelLock.Unlock()
-		return resp.ChannelId, nil
+		c := &ClientChannel{internalChannel: conn.newChannel(m.config.ChannelPacketQueueLen), client: m}
+		c.client.SetCtxData(CtxClient, m)
+		return c, nil
 	} else {
-		return 0, fmt.Errorf(resp.Message)
+		return nil, fmt.Errorf(resp.Message)
 	}
 }
 
 func (m *Client) newConnection() (*Connection, error) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", m.serverAddr)
+	conn, err := net.DialTimeout("tcp4", m.serverAddr, m.config.TcpConnectTimeout)
 	if err != nil {
 		return nil, err
 	}
-	tcpConn, err := net.DialTCP("tcp4", nil, tcpAddr)
-	if err != nil {
-		return nil, err
-	}
+	tcpConn := conn.(*net.TCPConn)
 	ret, err := NewConnection(tcpConn, RoleClient, int(m.config.TcpWriteQueueLen))
 	if err != nil {
 		return nil, err
 	}
+
+	tcpConn.SetKeepAlive(true)
+	tcpConn.SetKeepAlivePeriod(time.Second * 15)
+	tcpConn.SetReadBuffer(m.config.TcpReadBufferSize)
+	tcpConn.SetWriteBuffer(m.config.TcpWriteBufferSize)
+
 	m.connLock.Lock()
 	m.connections = append(m.connections, ret)
 	m.connLock.Unlock()
@@ -79,7 +94,7 @@ func (m *Client) getFreeConnection() (*Connection, error) {
 	m.connLock.Lock()
 	for _, v := range m.connections {
 		v.ChannelsLock.Lock()
-		if len(m.channels) < m.config.MaxChannelsPerConn {
+		if len(v.Channels) < m.config.MaxChannelsPerConn {
 			conn = v
 			v.ChannelsLock.Unlock()
 			break
@@ -94,47 +109,78 @@ func (m *Client) getFreeConnection() (*Connection, error) {
 	return conn, err
 }
 
-func (m *Client) doRequest(channel *Channel, path string, requestData []byte, timeout time.Duration) ([]byte, error) {
+//对于"消息式"请求/响应（系统自动将多个部分的响应数据合成为一个完整的响应，并通过这个阻塞的函数返回）
+func (m *ClientChannel) DoRequest(path string, requestData []byte, timeout time.Duration) ([]byte, error) {
+	if m.internalChannel != nil && m.internalChannel.err != nil {
+		return nil, fmt.Errorf("this channel is invalid, [%s]", m.internalChannel.err.Error())
+	}
+
 	pkt := &Packet{
 		Type:      PacketTypeRequest,
 		Path:      path,
-		ChannelId: channel.Id,
+		ChannelId: m.internalChannel.Id,
 		Data:      requestData,
-		channel:   channel,
+		channel:   m.internalChannel,
 	}
-	if err := channel.SendPacket(pkt); err != nil {
+	if err := m.internalChannel.SendPacket(pkt); err != nil {
 		return nil, err
 	}
+
+	respChan := make(chan *Packet)
+	m.internalChannel.SetCtxData(CtxResponseChan, respChan)
+	defer func() {
+		m.internalChannel.RemoveCtxData(CtxResponseChan)
+		close(respChan)
+	}()
+
 	if timeout > 0 {
 		select {
 		case <-time.After(timeout):
-			err := fmt.Errorf("wait response timeout")
-			channel.Close(err)
-			return nil, err
-		case resp := <-channel.serverResponse:
+			return nil, ErrRequestTimeout
+		case resp := <-respChan:
 			if resp != nil {
 				return resp.Data, nil
 			}
 		}
 	} else {
-		resp := <-channel.serverResponse
+		resp := <-respChan
 		if resp != nil {
 			return resp.Data, nil
 		}
 	}
-	return nil, fmt.Errorf("unknown")
+	return nil, ErrUnknown
 }
 
-func (m *Client) DoRequest(channelId uint32, path string, requestData []byte, timeout time.Duration) ([]byte, error) {
-	m.channelLock.Lock()
-	c, ok := m.channels[channelId]
-	m.channelLock.Unlock()
-	if !ok {
-		return nil, fmt.Errorf("invalid channel id: %d", channelId)
+//对于流式请求/响应（用户自己注册处理Handler，每接收到一部分响应数据，系统会调用Handler一次，这个调用是异步的，发送函数立即返回）
+func (m *ClientChannel) DoStreamRequest(path string, requestData []byte) error {
+	if m.internalChannel != nil && m.internalChannel.err != nil {
+		return fmt.Errorf("this channel is invalid, [%s]", m.internalChannel.err.Error())
 	}
-	return m.doRequest(c, path, requestData)
+
+	pkt := &Packet{
+		Type:      PacketTypeRequest,
+		Path:      path,
+		ChannelId: m.internalChannel.Id,
+		Data:      requestData,
+		channel:   m.internalChannel,
+	}
+	if err := m.internalChannel.SendPacket(pkt); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (m *Client) CloseChannel(channdlId uint32) error {
+func (m *ClientChannel) Close(err error) {
+	if m.internalChannel != nil {
+		m.internalChannel.Close(err)
+	}
+}
 
+func (m *Client) RegisterHandler(path string, handler PathHandler) error {
+	return m.handler.pathHandlerManager.registerHandler(path, handler)
+}
+
+func (m *Client) UnRegisterHandler(path string) {
+	m.handler.pathHandlerManager.unRegisterHandler(path)
 }

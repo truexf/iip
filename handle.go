@@ -22,43 +22,93 @@ type ResponseHandleFail struct {
 	Message string `json:"message,omitempty"`
 }
 
+func (m *ResponseHandleFail) Data() []byte {
+	if ret, err := json.Marshal(m); err == nil {
+		return ret
+	} else {
+		return DefaultResponseData
+	}
+}
+
+func ErrorResponse(err *Error) *ResponseHandleFail {
+	return &ResponseHandleFail{Code: err.Code, Message: err.Message}
+}
+
+type PathHandlerManager struct {
+	HanderMap map[string]PathHandler
+	sync.Mutex
+}
+
+func (m *PathHandlerManager) getHandler(path string) PathHandler {
+	m.Lock()
+	defer m.Unlock()
+	if m.HanderMap == nil {
+		m.HanderMap = make(map[string]PathHandler)
+	}
+	if ret, ok := m.HanderMap[path]; ok {
+		return ret
+	}
+	return nil
+}
+
+func (m *PathHandlerManager) registerHandler(path string, handler PathHandler) error {
+	if handler == nil {
+		return fmt.Errorf("hander is nil")
+	}
+	if len(path) > int(MaxPathLen) {
+		return fmt.Errorf("path is too large, must <= %d", MaxPathLen)
+	}
+	m.Lock()
+	defer m.Unlock()
+	if m.HanderMap == nil {
+		m.HanderMap = make(map[string]PathHandler)
+	}
+	m.HanderMap[path] = handler
+	return nil
+}
+
+func (m *PathHandlerManager) unRegisterHandler(path string) {
+	m.Lock()
+	defer m.Unlock()
+	if m.HanderMap == nil {
+		m.HanderMap = make(map[string]PathHandler)
+	}
+	delete(m.HanderMap, path)
+}
+
 type Handler interface {
-	Handle(request *Packet) ([]byte, error)
+	Handle(request *Packet, dataCompleted bool) ([]byte, error)
 }
 
 type PathHandler interface {
-	Handle(path string, requestData []byte) ([]byte, error)
+	Handle(path string, requestData []byte, dataCompleted bool) ([]byte, error)
 }
 
-type SysHandler struct {
+type serverHandler struct {
+	DefaultContext
+	pathHandlerManager *PathHandlerManager
 }
 
-var sysHandler = &SysHandler{}
-
-func (m *SysHandler) Handle(request *Packet) ([]byte, error) {
+func (m *serverHandler) Handle(request *Packet, dataCompleted bool) ([]byte, error) {
 	if request == nil || request.Path == "" || request.channel == nil || request.channel.Conn == nil {
 		return nil, fmt.Errorf("invalid request")
 	}
 	switch request.Path {
-	case NewChannelPath:
-		c, err := request.channel.Conn.newChannel(ChannelPacketQueueLen)
-		if err != nil {
-			bts, _ := json.Marshal(&ResponseNewChannel{Code: -1, Message: err.Error()})
-			return bts, nil
-		}
+	case PathNewChannel:
+		c := request.channel.Conn.newChannel(ChannelPacketQueueLen)
 		bts, _ := json.Marshal(&ResponseNewChannel{Code: 0, ChannelId: c.Id})
 		return bts, nil
-	case DeleteChannelPath:
+	case PathDeleteChannel:
 		request.channel.Close(fmt.Errorf("close by peer command"))
 		bts, _ := json.Marshal(&ResponseDeleteChannel{Code: 0})
 		return bts, nil
 	default:
-		pathHandler := pathHandlerMan.getHandler(request.Path)
+		pathHandler := m.pathHandlerManager.getHandler(request.Path)
 		if pathHandler == nil {
 			bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "no handler"})
 			return bts, nil
 		} else {
-			ret, err := pathHandler.Handle(request.Path, request.Data)
+			ret, err := pathHandler.Handle(request.Path, request.Data, dataCompleted)
 			if err != nil {
 				bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "handler fail:" + err.Error()})
 				return bts, nil
@@ -69,37 +119,33 @@ func (m *SysHandler) Handle(request *Packet) ([]byte, error) {
 	}
 }
 
-type PathHandlerManager struct {
-	HanderMap map[string]PathHandler
-	sync.Mutex
+type clientHandler struct {
+	DefaultContext
+	pathHandlerManager *PathHandlerManager
 }
 
-var pathHandlerMan = &PathHandlerManager{HanderMap: make(map[string]PathHandler)}
-
-func (m *PathHandlerManager) getHandler(path string) PathHandler {
-	m.Lock()
-	defer m.Unlock()
-	if ret, ok := m.HanderMap[path]; ok {
-		return ret
+func (m *clientHandler) Handle(response *Packet, dataCompleted bool) ([]byte, error) {
+	if response == nil || response.Path == "" || response.channel == nil || response.channel.Conn == nil {
+		return nil, fmt.Errorf("invalid response")
 	}
-	return nil
-}
-
-func (m *PathHandlerManager) RegisterHandler(path string, handler PathHandler) error {
-	if handler == nil {
-		return fmt.Errorf("hander is nil")
+	switch response.Path {
+	case PathDeleteChannel:
+		response.channel.Close(fmt.Errorf("close by peer command"))
+		bts, _ := json.Marshal(&ResponseDeleteChannel{Code: 0})
+		return bts, nil
+	default:
+		pathHandler := m.pathHandlerManager.getHandler(response.Path)
+		if pathHandler == nil {
+			bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "no handler"})
+			return bts, nil
+		} else {
+			ret, err := pathHandler.Handle(response.Path, response.Data, dataCompleted)
+			if err != nil {
+				bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "handler fail:" + err.Error()})
+				return bts, nil
+			} else {
+				return ret, nil
+			}
+		}
 	}
-	if len(path) > int(MaxPathLen) {
-		return fmt.Errorf("path is too large, must <= %d", MaxPathLen)
-	}
-	m.Lock()
-	defer m.Unlock()
-	m.HanderMap[path] = handler
-	return nil
-}
-
-func (m *PathHandlerManager) UnRegisterHandler(path string) {
-	m.Lock()
-	defer m.Unlock()
-	delete(m.HanderMap, path)
 }
