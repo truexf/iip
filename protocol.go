@@ -142,6 +142,7 @@ func CheckServerPacketStatus(prev, current byte) error {
 	return nil
 }
 
+//channel的实现
 type Channel struct {
 	DefaultErrorHolder
 	DefaultContext
@@ -427,7 +428,7 @@ func (m *Connection) makeNewChannelId() uint32 {
 	defer m.ChannelsLock.Unlock()
 	var ret uint32 = 0
 	if len(m.FreeChannleId) > 0 {
-		for k, _ := range m.FreeChannleId {
+		for k := range m.FreeChannleId {
 			ret = k
 			delete(m.FreeChannleId, k)
 			return ret
@@ -563,6 +564,8 @@ func (m *Connection) clientReadLoop() {
 			return
 		}
 		channel.PacketStatus = status
+		channel.ReadPacketCount++
+		channel.ReadBytes += int64(len(pkt.Data) + 1 + len(pkt.Path) + 1 + 4 + 4)
 		channel.ReceivedQueue <- pkt
 	}
 }
@@ -635,6 +638,8 @@ func (m *Connection) serverReadLoop() {
 			return
 		}
 		channel.PacketStatus = status
+		channel.ReadPacketCount++
+		channel.ReadBytes += int64(len(pkt.Data) + 1 + len(pkt.Path) + 1 + 4 + 4)
 		channel.ReceivedQueue <- pkt
 	}
 }
