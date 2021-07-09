@@ -15,6 +15,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/truexf/goutil"
 )
 
 func isClientStatus(status byte) bool {
@@ -346,6 +348,7 @@ func (m *Channel) handleClientLoop() {
 	// merge 1 or 1+ packet into an whole response
 	var pktWholeResponse *Packet
 	handler := m.conn.GetCtxData(CtxClient).(*Client).handler
+	uncompletedReqQ := m.GetCtxData(CtxUncompletedRequestChan).(*goutil.LinkedList)
 	for {
 		select {
 		case <-m.closeNotify:
@@ -365,6 +368,8 @@ func (m *Channel) handleClientLoop() {
 			}
 
 			//handle
+			req := uncompletedReqQ.PopHead(true).([]byte)
+			m.SetCtxData(CtxRequest, req)
 			_, err := handler.Handle(m, pktWholeResponse, isServerStatusCompleted(pkt.Status))
 			if err != nil {
 				log.Errorf("handle pkt %s fail, %s", pkt.Path, err.Error())
@@ -376,6 +381,8 @@ func (m *Channel) handleClientLoop() {
 					cc <- pktWholeResponse
 				}
 				pktWholeResponse = nil
+			} else {
+				uncompletedReqQ.PushHead(req, true)
 			}
 		}
 	}
