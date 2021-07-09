@@ -12,7 +12,7 @@ import (
 type EchoClientHandler struct {
 }
 
-func (m *EchoClientHandler) Handle(path string, responseData []byte, dataCompleted bool) ([]byte, error) {
+func (m *EchoClientHandler) Handle(c *iip.Channel, path string, responseData []byte, dataCompleted bool) ([]byte, error) {
 	fmt.Printf("response in handler: %s\n", string(responseData))
 	return nil, nil
 }

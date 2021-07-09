@@ -9,7 +9,7 @@ import (
 type EchoServerHandler struct {
 }
 
-func (m *EchoServerHandler) Handle(path string, requestData []byte, dataCompleted bool) ([]byte, error) {
+func (m *EchoServerHandler) Handle(c *iip.Channel, path string, requestData []byte, dataCompleted bool) ([]byte, error) {
 	if dataCompleted {
 		fmt.Printf("%s received: %s\n", path, string(requestData))
 		return requestData, nil

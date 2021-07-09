@@ -84,12 +84,12 @@ func (m *PathHandlerManager) unRegisterHandler(path string) {
 
 //packet handler接口
 type Handler interface {
-	Handle(request *Packet, dataCompleted bool) ([]byte, error)
+	Handle(c *Channel, request *Packet, dataCompleted bool) ([]byte, error)
 }
 
 //path-handler接口，PathHandler在packet-handler基础上执行，有serverHandler或clientHandler在Handle函数内部调用
 type PathHandler interface {
-	Handle(path string, requestData []byte, dataCompleted bool) ([]byte, error)
+	Handle(c *Channel, path string, data []byte, dataCompleted bool) ([]byte, error)
 }
 
 type serverHandler struct {
@@ -97,13 +97,13 @@ type serverHandler struct {
 	pathHandlerManager *PathHandlerManager
 }
 
-func (m *serverHandler) Handle(request *Packet, dataCompleted bool) ([]byte, error) {
-	if request == nil || request.Path == "" || request.channel == nil || request.channel.Conn == nil {
+func (m *serverHandler) Handle(c *Channel, request *Packet, dataCompleted bool) ([]byte, error) {
+	if request == nil || request.Path == "" || request.channel == nil || request.channel.conn == nil {
 		return nil, fmt.Errorf("invalid request")
 	}
 	switch request.Path {
 	case PathNewChannel:
-		c := request.channel.Conn.newChannel(false, 100)
+		c := request.channel.conn.newChannel(false, 100)
 		bts, _ := json.Marshal(&ResponseNewChannel{Code: 0, ChannelId: c.Id})
 		return bts, nil
 	case PathDeleteChannel:
@@ -116,7 +116,7 @@ func (m *serverHandler) Handle(request *Packet, dataCompleted bool) ([]byte, err
 			bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "no handler"})
 			return bts, nil
 		} else {
-			ret, err := pathHandler.Handle(request.Path, request.Data, dataCompleted)
+			ret, err := pathHandler.Handle(c, request.Path, request.Data, dataCompleted)
 			if err != nil {
 				bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "handler fail:" + err.Error()})
 				return bts, nil
@@ -132,8 +132,8 @@ type clientHandler struct {
 	pathHandlerManager *PathHandlerManager
 }
 
-func (m *clientHandler) Handle(response *Packet, dataCompleted bool) ([]byte, error) {
-	if response == nil || response.Path == "" || response.channel == nil || response.channel.Conn == nil {
+func (m *clientHandler) Handle(c *Channel, response *Packet, dataCompleted bool) ([]byte, error) {
+	if response == nil || response.Path == "" || response.channel == nil || response.channel.conn == nil {
 		return nil, fmt.Errorf("invalid response")
 	}
 	switch response.Path {
@@ -147,7 +147,7 @@ func (m *clientHandler) Handle(response *Packet, dataCompleted bool) ([]byte, er
 			bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "no handler"})
 			return bts, nil
 		} else {
-			ret, err := pathHandler.Handle(response.Path, response.Data, dataCompleted)
+			ret, err := pathHandler.Handle(c, response.Path, response.Data, dataCompleted)
 			if err != nil {
 				bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "handler fail:" + err.Error()})
 				return bts, nil

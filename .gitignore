@@ -4,6 +4,8 @@
 *.dll
 *.so
 *.dylib
+echo_client
+echo_server
 
 # Test binary, built with `go test -c`
 *.test

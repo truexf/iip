@@ -99,6 +99,20 @@ func (m *Client) newConnection() (*Connection, error) {
 	return ret, nil
 }
 
+func (m *Client) removeConnection(conn *Connection) {
+	m.connLock.Lock()
+	defer m.connLock.Unlock()
+	for i, v := range m.connections {
+		if v == conn {
+			conns := m.connections[:i]
+			if i < len(m.connections) {
+				conns = append(conns, m.connections[i+1:]...)
+			}
+			m.connections = conns
+			return
+		}
+	}
+}
 func (m *Client) getFreeConnection() (*Connection, error) {
 	var conn *Connection = nil
 	m.connLock.Lock()
