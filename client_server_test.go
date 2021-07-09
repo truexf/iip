@@ -13,6 +13,7 @@ func (m *EchoClientHandlerTest) Handle(c *Channel, path string, responseData []b
 	return nil, nil
 }
 
+//跑这个测试前须先在9090端口启动echo_server, echo_server在example/echo_server.go
 func BenchmarkEchoClientServer(t *testing.B) {
 	c := make(chan error, 3)
 	for i := 0; i < 3; i++ {
@@ -64,7 +65,7 @@ func BenchmarkEchoClientServer(t *testing.B) {
 	for i := 0; i < 3; i++ {
 		e := <-c
 		if e != nil {
-			t.Fatalf("fail")
+			t.Fatalf(e.Error())
 		}
 	}
 }
