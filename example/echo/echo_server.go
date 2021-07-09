@@ -10,12 +10,18 @@ type EchoServerHandler struct {
 }
 
 func (m *EchoServerHandler) Handle(c *iip.Channel, path string, requestData []byte, dataCompleted bool) ([]byte, error) {
-	if dataCompleted {
-		fmt.Printf("%s received: %s\n", path, string(requestData))
+	if path == "/echo" {
+		if dataCompleted {
+			fmt.Printf("%s received: %s\n", path, string(requestData))
+			return requestData, nil
+		} else {
+			return nil, iip.ErrPacketContinue
+		}
+	} else if path == "/echo_benchmark" {
 		return requestData, nil
-	} else {
-		return nil, iip.ErrPacketContinue
 	}
+	return nil, fmt.Errorf("path %s not support", path)
+
 }
 
 func main() {
@@ -32,7 +38,9 @@ func main() {
 	if err != nil {
 		fmt.Println(err.Error())
 	}
-	server.RegisterHandler("/echo", &EchoServerHandler{})
+	echoHandler := &EchoServerHandler{}
+	server.RegisterHandler("/echo", echoHandler)
+	server.RegisterHandler("/echo_benchmark", echoHandler)
 	if err := server.StartListen(); err != nil {
 		fmt.Println(err.Error())
 	}

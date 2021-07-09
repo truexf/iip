@@ -138,6 +138,9 @@ func (m *ClientChannel) DoRequest(path string, requestData []byte, timeout time.
 	if m.internalChannel != nil && m.internalChannel.err != nil {
 		return nil, fmt.Errorf("this channel is invalid, [%s]", m.internalChannel.err.Error())
 	}
+	if !ValidatePath(path) {
+		return nil, fmt.Errorf("invalid path: %s", path)
+	}
 
 	pkt := &Packet{
 		Type:      PacketTypeRequest,
@@ -179,6 +182,9 @@ func (m *ClientChannel) DoRequest(path string, requestData []byte, timeout time.
 func (m *ClientChannel) DoStreamRequest(path string, requestData []byte) error {
 	if m.internalChannel != nil && m.internalChannel.err != nil {
 		return fmt.Errorf("this channel is invalid, [%s]", m.internalChannel.err.Error())
+	}
+	if !ValidatePath(path) {
+		return fmt.Errorf("invalid path: %s", path)
 	}
 
 	pkt := &Packet{

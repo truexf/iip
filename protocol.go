@@ -75,6 +75,9 @@ func CreateNetPacket(pkt *Packet) ([]byte, error) {
 	if len(pkt.Data) > int(MaxPacketSize) {
 		return nil, fmt.Errorf("data is too large, must be <= %d bytes", MaxPacketSize)
 	}
+	if !ValidatePath(pkt.Path) {
+		return nil, fmt.Errorf("invalid path: %s", pkt.Path)
+	}
 	pktLen := 1 + len(pkt.Path) + 4 + 4 + len(pkt.Data)
 	pktData := make([]byte, 0, pktLen)
 	pktData = append(pktData, pkt.Status)          //packet type
@@ -87,6 +90,43 @@ func CreateNetPacket(pkt *Packet) ([]byte, error) {
 	pktData = append(pktData, bt...)       //data length
 	pktData = append(pktData, pkt.Data...) //data
 	return pktData, nil
+}
+
+func ReadPacket(reader io.Reader) (*Packet, error) {
+	bufReader := bufio.NewReaderSize(reader, int(PacketReadBufSize))
+	btsChannelId := make([]byte, 4)
+	btsDataLen := make([]byte, 4)
+	//read status
+	status, err := bufReader.ReadByte()
+	if err != nil {
+		return nil, fmt.Errorf("read error")
+	}
+
+	//read path
+	path, err := bufReader.ReadSlice(0)
+	if err != nil {
+		return nil, fmt.Errorf("read error")
+	}
+	pathStr := string(path[:len(path)-1])
+
+	//read channelID
+	if _, err = io.ReadFull(bufReader, btsChannelId); err != nil {
+		return nil, fmt.Errorf("read error")
+	}
+	channelId := binary.BigEndian.Uint32(btsChannelId)
+
+	//read datalen
+	if _, err = io.ReadFull(bufReader, btsDataLen); err != nil {
+		return nil, fmt.Errorf("read error")
+	}
+	dataLen := binary.BigEndian.Uint32(btsDataLen)
+
+	//read data
+	pkt := &Packet{Type: PacketTypeResponse, Status: status, Path: pathStr, ChannelId: channelId, Data: make([]byte, dataLen)}
+	if _, err = io.ReadFull(bufReader, pkt.Data); err != nil {
+		return nil, fmt.Errorf("read error")
+	}
+	return pkt, nil
 }
 
 func WritePacket(pkt *Packet, writer io.Writer) (int, error) {
