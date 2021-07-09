@@ -13,7 +13,9 @@ type EchoClientHandler struct {
 }
 
 func (m *EchoClientHandler) Handle(c *iip.Channel, path string, responseData []byte, dataCompleted bool) ([]byte, error) {
-	fmt.Printf("response in handler: %s\n", string(responseData))
+	req := c.GetCtxData(iip.CtxRequest).([]byte)
+	fmt.Printf("response in handler: %s\n for request: %s\n", string(responseData), string(req))
+
 	return nil, nil
 }
 

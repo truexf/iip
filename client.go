@@ -45,6 +45,7 @@ type ClientChannel struct {
 	// 前一个request的response不会阻塞下一个request,也就是不用等待一个request的rewponse完成，就可以继续发送下一个request。
 	// 当异步的response到达的时候，handler需要知道该response对应哪个request（可能之前已经发出多个request）。因此，通过一个
 	// “未收到response的已经发出request队列”来保存发出request，当response到达时，获取队列的第一个元素即为该response对应的request。
+	// 在handle函数里,可以通过channel.GetCtxData(CtxRequest)获得当前响应对应的请求
 	uncompletedRequestQueue *goutil.LinkedList
 	sendRequestLock         sync.Mutex
 }
