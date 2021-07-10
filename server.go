@@ -39,7 +39,7 @@ func NewServer(config ServerConfig, listenAddr string) (*Server, error) {
 		config:      config,
 		listenAddr:  listenAddr,
 		connections: make(map[string]*Connection),
-		handler:     &serverHandler{pathHandlerManager: &PathHandlerManager{}},
+		handler:     &serverHandler{pathHandlerManager: &ServerPathHandlerManager{}},
 	}
 	return ret, nil
 }
@@ -56,7 +56,7 @@ func (m *Server) acceptConn() (*Connection, error) {
 			}
 		}
 		tcpConn := netConn.(*net.TCPConn)
-		if conn, err := NewConnection(tcpConn, RoleServer, int(m.config.TcpWriteQueueLen)); err == nil {
+		if conn, err := NewConnection(nil, m, tcpConn, RoleServer, int(m.config.TcpWriteQueueLen)); err == nil {
 			m.connLock.Lock()
 			m.connections[tcpConn.RemoteAddr().String()] = conn
 			m.connLock.Unlock()
@@ -124,7 +124,7 @@ func (m *Server) Stop(err error) {
 	close(m.closeNotify)
 }
 
-func (m *Server) RegisterHandler(path string, handler PathHandler) error {
+func (m *Server) RegisterHandler(path string, handler ServerPathHandler) error {
 	return m.handler.pathHandlerManager.registerHandler(path, handler)
 }
 

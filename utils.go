@@ -87,6 +87,29 @@ func (m *DefaultContext) RemoveCtxData(key string) {
 	delete(m.ctx, key)
 }
 
+type Request interface {
+	Context
+	Data() []byte
+}
+
+type DefaultRequest struct {
+	DefaultContext
+	data []byte
+}
+
+type Response struct {
+	Request Request
+	Data    []byte
+}
+
+func NewDefaultRequest(data []byte) Request {
+	return &DefaultRequest{data: data}
+}
+
+func (m *DefaultRequest) Data() []byte {
+	return m.data
+}
+
 func ValidatePath(path string) bool {
 	if path == "" {
 		return false
@@ -94,18 +117,6 @@ func ValidatePath(path string) bool {
 	for i := 0; i < len(path); i++ {
 		if (path[i] >= 'A' && path[i] <= 'z') || (path[i] >= '0' && path[i] <= '9') || path[i] == '_' || path[i] == '-' || path[i] == '/' {
 		} else {
-			return false
-		}
-	}
-	return true
-}
-
-func SameBytes(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, v := range a {
-		if v != b[i] {
 			return false
 		}
 	}

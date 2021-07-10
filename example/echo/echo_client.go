@@ -12,11 +12,10 @@ import (
 type EchoClientHandler struct {
 }
 
-func (m *EchoClientHandler) Handle(c *iip.Channel, path string, responseData []byte, dataCompleted bool) ([]byte, error) {
-	req := c.GetCtxData(iip.CtxRequest).([]byte)
-	fmt.Printf("response in handler: %s\n for request: %s\n", string(responseData), string(req))
+func (m *EchoClientHandler) Handle(path string, request iip.Request, responseData []byte, dataCompleted bool) error {
+	fmt.Printf("response in handler: %s\n for request: %s\n", string(responseData), string(request.Data()))
 
-	return nil, nil
+	return nil
 }
 
 func main() {
@@ -47,7 +46,7 @@ func main() {
 		if !lineReader.Scan() {
 			break
 		}
-		response, err := channel.DoRequest("/echo", lineReader.Bytes(), time.Second)
+		response, err := channel.DoRequest("/echo", iip.NewDefaultRequest(lineReader.Bytes()), time.Second)
 		if err != nil {
 			fmt.Println(err.Error())
 		} else {

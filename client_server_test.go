@@ -1,6 +1,7 @@
 package iip
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 	"time"
@@ -9,8 +10,8 @@ import (
 type EchoClientHandlerTest struct {
 }
 
-func (m *EchoClientHandlerTest) Handle(c *Channel, path string, responseData []byte, dataCompleted bool) ([]byte, error) {
-	return nil, nil
+func (m *EchoClientHandlerTest) Handle(path string, request Request, responseData []byte, dataCompleted bool) error {
+	return nil
 }
 
 //跑这个测试前须先在9090端口启动echo_server, echo_server在example/echo_server.go
@@ -50,15 +51,17 @@ func BenchmarkEchoClientServer(t *testing.B) {
 			1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
 			1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest` + fmt.Sprintf("%d", time.Now().UnixNano()))
 
-			bts, err := channel.DoRequest("/echo_benchmark", echoData, time.Second)
+			bts, err := channel.DoRequest("/echo_benchmark", NewDefaultRequest(echoData), time.Second)
 			if err != nil {
 				c <- err
 				return
 			}
-			if !SameBytes(bts, echoData) {
+			if !bytes.Equal(bts, echoData) {
 				c <- fmt.Errorf("response not same as request")
 				return
 			}
+			channel.Close(nil)
+			client.Close()
 			c <- nil
 		}()
 	}

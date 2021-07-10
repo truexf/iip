@@ -39,17 +39,17 @@ func ErrorResponse(err *Error) *ResponseHandleFail {
 	return &ResponseHandleFail{Code: err.Code, Message: err.Message}
 }
 
-//管理PathHandler,从属于一个client或server
-type PathHandlerManager struct {
-	HanderMap map[string]PathHandler
+//管理ServerPathHandler,从属于一个server
+type ServerPathHandlerManager struct {
+	HanderMap map[string]ServerPathHandler
 	sync.Mutex
 }
 
-func (m *PathHandlerManager) getHandler(path string) PathHandler {
+func (m *ServerPathHandlerManager) getHandler(path string) ServerPathHandler {
 	m.Lock()
 	defer m.Unlock()
 	if m.HanderMap == nil {
-		m.HanderMap = make(map[string]PathHandler)
+		m.HanderMap = make(map[string]ServerPathHandler)
 	}
 	if ret, ok := m.HanderMap[path]; ok {
 		return ret
@@ -57,44 +57,96 @@ func (m *PathHandlerManager) getHandler(path string) PathHandler {
 	return nil
 }
 
-func (m *PathHandlerManager) registerHandler(path string, handler PathHandler) error {
+func (m *ServerPathHandlerManager) registerHandler(path string, handler ServerPathHandler) error {
 	if handler == nil {
 		return fmt.Errorf("hander is nil")
 	}
 	if len(path) > int(MaxPathLen) {
 		return fmt.Errorf("path is too large, must <= %d", MaxPathLen)
 	}
+	if !ValidatePath(path) {
+		return fmt.Errorf("invalid path")
+	}
 	m.Lock()
 	defer m.Unlock()
 	if m.HanderMap == nil {
-		m.HanderMap = make(map[string]PathHandler)
+		m.HanderMap = make(map[string]ServerPathHandler)
 	}
 	m.HanderMap[path] = handler
 	return nil
 }
 
-func (m *PathHandlerManager) unRegisterHandler(path string) {
+func (m *ServerPathHandlerManager) unRegisterHandler(path string) {
 	m.Lock()
 	defer m.Unlock()
 	if m.HanderMap == nil {
-		m.HanderMap = make(map[string]PathHandler)
+		m.HanderMap = make(map[string]ServerPathHandler)
+	}
+	delete(m.HanderMap, path)
+}
+
+//管理ClientPathHandler,从属于一个client
+type ClientPathHandlerManager struct {
+	HanderMap map[string]ClientPathHandler
+	sync.Mutex
+}
+
+func (m *ClientPathHandlerManager) getHandler(path string) ClientPathHandler {
+	m.Lock()
+	defer m.Unlock()
+	if m.HanderMap == nil {
+		m.HanderMap = make(map[string]ClientPathHandler)
+	}
+	if ret, ok := m.HanderMap[path]; ok {
+		return ret
+	}
+	return nil
+}
+
+func (m *ClientPathHandlerManager) registerHandler(path string, handler ClientPathHandler) error {
+	if handler == nil {
+		return fmt.Errorf("hander is nil")
+	}
+	if len(path) > int(MaxPathLen) {
+		return fmt.Errorf("path is too large, must <= %d", MaxPathLen)
+	}
+	if !ValidatePath(path) {
+		return fmt.Errorf("invalid path")
+	}
+	m.Lock()
+	defer m.Unlock()
+	if m.HanderMap == nil {
+		m.HanderMap = make(map[string]ClientPathHandler)
+	}
+	m.HanderMap[path] = handler
+	return nil
+}
+
+func (m *ClientPathHandlerManager) unRegisterHandler(path string) {
+	m.Lock()
+	defer m.Unlock()
+	if m.HanderMap == nil {
+		m.HanderMap = make(map[string]ClientPathHandler)
 	}
 	delete(m.HanderMap, path)
 }
 
 //packet handler接口
 type Handler interface {
-	Handle(c *Channel, request *Packet, dataCompleted bool) ([]byte, error)
+	Handle(c *Channel, data *Packet, dataCompleted bool) ([]byte, error)
 }
 
-//path-handler接口，PathHandler在packet-handler基础上执行，有serverHandler或clientHandler在Handle函数内部调用
-type PathHandler interface {
-	Handle(c *Channel, path string, data []byte, dataCompleted bool) ([]byte, error)
+type ClientPathHandler interface {
+	Handle(path string, request Request, responseData []byte, dataCompleted bool) error
+}
+
+type ServerPathHandler interface {
+	Handle(path string, requestData []byte, dataCompleted bool) (respData []byte, e error)
 }
 
 type serverHandler struct {
 	DefaultContext
-	pathHandlerManager *PathHandlerManager
+	pathHandlerManager *ServerPathHandlerManager
 }
 
 func (m *serverHandler) Handle(c *Channel, request *Packet, dataCompleted bool) ([]byte, error) {
@@ -103,7 +155,7 @@ func (m *serverHandler) Handle(c *Channel, request *Packet, dataCompleted bool) 
 	}
 	switch request.Path {
 	case PathNewChannel:
-		c := request.channel.conn.newChannel(false, 100)
+		c := request.channel.conn.newChannel(false, 100, nil, nil)
 		bts, _ := json.Marshal(&ResponseNewChannel{Code: 0, ChannelId: c.Id})
 		return bts, nil
 	case PathDeleteChannel:
@@ -116,7 +168,7 @@ func (m *serverHandler) Handle(c *Channel, request *Packet, dataCompleted bool) 
 			bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "no handler"})
 			return bts, nil
 		} else {
-			ret, err := pathHandler.Handle(c, request.Path, request.Data, dataCompleted)
+			ret, err := pathHandler.Handle(request.Path, request.Data, dataCompleted)
 			if err != nil {
 				bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "handler fail:" + err.Error()})
 				return bts, nil
@@ -129,7 +181,7 @@ func (m *serverHandler) Handle(c *Channel, request *Packet, dataCompleted bool) 
 
 type clientHandler struct {
 	DefaultContext
-	pathHandlerManager *PathHandlerManager
+	pathHandlerManager *ClientPathHandlerManager
 }
 
 func (m *clientHandler) Handle(c *Channel, response *Packet, dataCompleted bool) ([]byte, error) {
@@ -147,12 +199,11 @@ func (m *clientHandler) Handle(c *Channel, response *Packet, dataCompleted bool)
 			bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "no handler"})
 			return bts, nil
 		} else {
-			ret, err := pathHandler.Handle(c, response.Path, response.Data, dataCompleted)
+			err := pathHandler.Handle(response.Path, c.GetCtxData(CtxRequest).(Request), response.Data, dataCompleted)
 			if err != nil {
-				bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "handler fail:" + err.Error()})
-				return bts, nil
+				return nil, err
 			} else {
-				return ret, nil
+				return nil, nil
 			}
 		}
 	}

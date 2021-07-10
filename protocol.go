@@ -347,7 +347,7 @@ func (m *Channel) handleServerLoop() {
 func (m *Channel) handleClientLoop() {
 	// merge 1 or 1+ packet into an whole response
 	var pktWholeResponse *Packet
-	handler := m.conn.GetCtxData(CtxClient).(*Client).handler
+	handler := m.GetCtxData(CtxClient).(*Client).handler
 	uncompletedReqQ := m.GetCtxData(CtxUncompletedRequestChan).(*goutil.LinkedList)
 	for {
 		select {
@@ -368,7 +368,12 @@ func (m *Channel) handleClientLoop() {
 			}
 
 			//handle
-			req := uncompletedReqQ.PopHead(true).([]byte)
+			reqi := uncompletedReqQ.PopHead(true)
+			if reqi == nil {
+				m.Close(fmt.Errorf("request not found"))
+				return
+			}
+			req := reqi.(Request)
 			m.SetCtxData(CtxRequest, req)
 			_, err := handler.Handle(m, pktWholeResponse, isServerStatusCompleted(pkt.Status))
 			if err != nil {
@@ -376,9 +381,9 @@ func (m *Channel) handleClientLoop() {
 			}
 
 			if isServerStatusCompleted(pkt.Status) {
-				if c := m.GetCtxData(CtxResponseChan); c != nil {
-					cc := c.(chan *Packet)
-					cc <- pktWholeResponse
+				respCompletedChan := req.GetCtxData(CtxResponseChan)
+				if respCompletedChan != nil {
+					respCompletedChan.(chan []byte) <- pktWholeResponse.Data
 				}
 				pktWholeResponse = nil
 			} else {
@@ -400,7 +405,7 @@ func (m *Channel) Close(err error) {
 	} else {
 		m.err = fmt.Errorf("unknown")
 	}
-	log.Errorf("channel closed: %s", err.Error())
+	log.Errorf("channel closed: %s", m.err.Error())
 	if m.closeNotify != nil {
 		close(m.closeNotify)
 		m.closeNotify = nil
@@ -421,7 +426,7 @@ type Connection struct {
 	closeLock     uint32
 }
 
-func NewConnection(netConn *net.TCPConn, role byte, writeQueueLen int) (*Connection, error) {
+func NewConnection(client *Client, server *Server, netConn *net.TCPConn, role byte, writeQueueLen int) (*Connection, error) {
 	if role != RoleClient && role != RoleServer {
 		return nil, fmt.Errorf("invalid role value")
 	}
@@ -433,7 +438,17 @@ func NewConnection(netConn *net.TCPConn, role byte, writeQueueLen int) (*Connect
 		tcpWriteQueue: make(chan *Packet, writeQueueLen),
 		closeNotify:   make(chan int, 1),
 	}
-	ret.newChannel(true, 100)
+	if client != nil {
+		ret.SetCtxData(CtxClient, client)
+	} else if server != nil {
+		ret.SetCtxData(CtxServer, server)
+	}
+	ucrq := goutil.NewLinkedList(true)
+	if role == RoleClient {
+		ret.newChannel(true, 100, map[string]interface{}{CtxUncompletedRequestChan: ucrq, CtxClient: client}, nil)
+	} else {
+		ret.newChannel(true, 100, nil, nil)
+	}
 	if role == RoleClient {
 		go ret.clientReadLoop()
 	} else {
@@ -512,7 +527,7 @@ func (m *Connection) makeNewChannelId() uint32 {
 	return 0
 }
 
-func (m *Connection) newChannel(sys bool, queueLen uint32) *Channel {
+func (m *Connection) newChannel(sys bool, queueLen uint32, clientCtx map[string]interface{}, serverCtx map[string]interface{}) *Channel {
 	ret := &Channel{
 		Id:            0,
 		NewTime:       time.Now(),
@@ -529,9 +544,15 @@ func (m *Connection) newChannel(sys bool, queueLen uint32) *Channel {
 	defer m.ChannelsLock.Unlock()
 	m.Channels[ret.Id] = ret
 	if m.Role == RoleServer {
+		for k, v := range serverCtx {
+			ret.SetCtxData(k, v)
+		}
 		ret.SetCtxData(CtxServer, m.GetCtxData(CtxServer))
 		go ret.handleServerLoop()
 	} else if m.Role == RoleClient {
+		for k, v := range clientCtx {
+			ret.SetCtxData(k, v)
+		}
 		ret.SetCtxData(CtxClient, m.GetCtxData(CtxClient))
 		go ret.handleClientLoop()
 	}

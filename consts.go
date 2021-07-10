@@ -35,7 +35,7 @@ const (
 
 	//系统Context常量
 	CtxServer                 string = "/ctx/sys/server"
-	CtxClient                 string = "/ctx/sys/server"
+	CtxClient                 string = "/ctx/sys/client"
 	CtxResponseChan           string = "/ctx/sys/response_chan"
 	CtxUncompletedRequestChan string = "/ctx/sys/uncreq_chan" //见Client.uncompletedRequestQueue
 	CtxRequest                string = "/ctx/sys/request"     //在client handle函数里,可以通过channel.GetCtxData(CtxRequest)获得当前响应对应的请求
