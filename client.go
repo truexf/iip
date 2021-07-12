@@ -159,13 +159,11 @@ func (m *Client) newConnection() (*Connection, error) {
 	}
 	ret.SetCtxData(CtxClient, m)
 
-	if !m.isTls {
-		tcpConn := conn.(*net.TCPConn)
-		tcpConn.SetKeepAlive(true)
-		tcpConn.SetKeepAlivePeriod(time.Second * 15)
-		tcpConn.SetReadBuffer(m.config.TcpReadBufferSize)
-		tcpConn.SetWriteBuffer(m.config.TcpWriteBufferSize)
-	}
+	tcpConn := conn.(*net.TCPConn)
+	tcpConn.SetKeepAlive(true)
+	tcpConn.SetKeepAlivePeriod(time.Second * 15)
+	tcpConn.SetReadBuffer(m.config.TcpReadBufferSize)
+	tcpConn.SetWriteBuffer(m.config.TcpWriteBufferSize)
 
 	m.connLock.Lock()
 	m.connections = append(m.connections, ret)
