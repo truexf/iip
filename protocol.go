@@ -140,8 +140,6 @@ func WritePacket(pkt *Packet, writer io.Writer) (int, error) {
 	if err != nil {
 		log.Errorf("write packet fail, %s", err.Error())
 		return n, err
-	} else {
-		log.Logf("write packet success, %s", string(pkt.Data))
 	}
 	if n != len(data) {
 		return n, fmt.Errorf("writepacket not complete, totoal %d bytes, %d bytes writted. ", len(data), n)
