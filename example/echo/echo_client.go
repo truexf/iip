@@ -20,8 +20,8 @@ func (m *EchoClientHandler) Handle(path string, request iip.Request, responseDat
 }
 
 var (
-	certFileClient = flag.String("cert", "", "echo_server -cert certFile -key keyFile")
-	keyFileClient  = flag.String("key", "", "echo_server -cert certFile -key keyFile")
+	certFileClient = flag.String("cert", "", "echo_client -cert certFile -key keyFile")
+	keyFileClient  = flag.String("key", "", "echo_client -cert certFile -key keyFile")
 )
 
 func main() {
