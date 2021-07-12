@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 
 	"github.com/truexf/iip"
@@ -24,6 +25,11 @@ func (m *EchoServerHandler) Handle(path string, requestData []byte, dataComplete
 
 }
 
+var (
+	certFile = flag.String("cert", "", "echo_server -cert certFile -key keyFile")
+	keyFile  = flag.String("key", "", "echo_server -cert certFile -key keyFile")
+)
+
 func main() {
 	fmt.Println("start listen at :9090")
 	server, err := iip.NewServer(iip.ServerConfig{
@@ -41,10 +47,19 @@ func main() {
 	echoHandler := &EchoServerHandler{}
 	server.RegisterHandler("/echo", echoHandler)
 	server.RegisterHandler("/echo_benchmark", echoHandler)
-	if err := server.StartListen(); err != nil {
+	flag.Parse()
+	tp := ""
+	if *certFile != "" && *keyFile != "" {
+		fmt.Printf("certfile: %s, keyfile: %s\n", *certFile, *keyFile)
+		err = server.StartListenTLS(*certFile, *keyFile)
+		tp = "tls"
+	} else {
+		err = server.StartListen()
+	}
+	if err != nil {
 		fmt.Println(err.Error())
 	}
-	fmt.Println("server started success.")
+	fmt.Printf("%s server started success.\n", tp)
 	c := make(chan int)
 	<-c
 }

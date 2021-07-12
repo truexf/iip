@@ -138,7 +138,10 @@ func WritePacket(pkt *Packet, writer io.Writer) (int, error) {
 	}
 	n, err := writer.Write(data)
 	if err != nil {
+		log.Errorf("write packet fail, %s", err.Error())
 		return n, err
+	} else {
+		log.Logf("write packet success, %s", string(pkt.Data))
 	}
 	if n != len(data) {
 		return n, fmt.Errorf("writepacket not complete, totoal %d bytes, %d bytes writted. ", len(data), n)
@@ -420,13 +423,13 @@ type Connection struct {
 	MaxChannelId  uint32
 	FreeChannleId map[uint32]struct{}
 	ChannelsLock  sync.RWMutex
-	tcpConn       *net.TCPConn
+	tcpConn       net.Conn
 	tcpWriteQueue chan *Packet
 	closeNotify   chan int
 	closeLock     uint32
 }
 
-func NewConnection(client *Client, server *Server, netConn *net.TCPConn, role byte, writeQueueLen int) (*Connection, error) {
+func NewConnection(client *Client, server *Server, netConn net.Conn, role byte, writeQueueLen int) (*Connection, error) {
 	if role != RoleClient && role != RoleServer {
 		return nil, fmt.Errorf("invalid role value")
 	}
@@ -445,9 +448,15 @@ func NewConnection(client *Client, server *Server, netConn *net.TCPConn, role by
 	}
 	ucrq := goutil.NewLinkedList(true)
 	if role == RoleClient {
-		ret.newChannel(true, 100, map[string]interface{}{CtxUncompletedRequestChan: ucrq, CtxClient: client}, nil)
+		c := ret.newChannel(true, 100, map[string]interface{}{CtxUncompletedRequestChan: ucrq, CtxClient: client}, nil)
+		if c == nil {
+			log.Errorf("client new sys channel fail")
+		}
 	} else {
-		ret.newChannel(true, 100, nil, nil)
+		c := ret.newChannel(true, 100, nil, nil)
+		if c == nil {
+			log.Errorf("server new sys channel fail")
+		}
 	}
 	if role == RoleClient {
 		go ret.clientReadLoop()
@@ -495,8 +504,6 @@ func (m *Connection) Close(err error) {
 		}
 	}
 
-	m.tcpConn.CloseWrite()
-	m.tcpConn.CloseRead()
 	m.tcpConn.Close()
 	for _, v := range m.Channels {
 		v.Close(fmt.Errorf("connection is closed"))

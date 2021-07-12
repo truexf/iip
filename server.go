@@ -6,6 +6,8 @@
 package iip
 
 import (
+	"crypto/rand"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"sync"
@@ -24,6 +26,9 @@ type ServerConfig struct {
 type Server struct {
 	DefaultErrorHolder
 	DefaultContext
+	isTls       bool
+	tlsCertFile string
+	tlsKeyFile  string
 	config      ServerConfig
 	listenAddr  string
 	tcpListener net.Listener
@@ -55,10 +60,9 @@ func (m *Server) acceptConn() (*Connection, error) {
 				return nil, err
 			}
 		}
-		tcpConn := netConn.(*net.TCPConn)
-		if conn, err := NewConnection(nil, m, tcpConn, RoleServer, int(m.config.TcpWriteQueueLen)); err == nil {
+		if conn, err := NewConnection(nil, m, netConn, RoleServer, int(m.config.TcpWriteQueueLen)); err == nil {
 			m.connLock.Lock()
-			m.connections[tcpConn.RemoteAddr().String()] = conn
+			m.connections[netConn.RemoteAddr().String()] = conn
 			m.connLock.Unlock()
 			conn.SetCtxData(CtxServer, m)
 			return conn, nil
@@ -75,13 +79,52 @@ func (m *Server) removeConn(addr string) {
 	delete(m.connections, addr)
 }
 
-//listen socket and start server process
+// listen socket and start server process
 func (m *Server) StartListen() error {
 	lsn, err := net.Listen("tcp4", m.listenAddr)
 	if err != nil {
 		return err
 	}
 	m.tcpListener = lsn
+	m.closeNotify = make(chan int)
+
+	go func() {
+		for {
+			select {
+			case <-m.closeNotify:
+				return
+			default:
+				if conn, err := m.acceptConn(); err != nil {
+					m.Stop(fmt.Errorf("accept connection fail, %s", err.Error()))
+					return
+				} else {
+					log.Logf("accepted new connection: %s", conn.tcpConn.RemoteAddr().String())
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+// listen socket and start server process in TLS mode
+func (m *Server) StartListenTLS(certFile, keyFile string) error {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return err
+	}
+	config := tls.Config{Certificates: []tls.Certificate{cert}}
+	config.Rand = rand.Reader
+	listener, err := tls.Listen("tcp4", m.listenAddr, &config)
+	if err != nil {
+		return err
+	}
+	m.isTls = true
+	m.tlsCertFile = certFile
+	m.tlsKeyFile = keyFile
+
+	m.tcpListener = listener
+	m.isTls = true
 	m.closeNotify = make(chan int)
 
 	go func() {
@@ -114,8 +157,6 @@ func (m *Server) Stop(err error) {
 	for _, conn := range m.connections {
 		conn.SetCtxData(CtxServer, nil)
 		if conn.tcpConn != nil {
-			conn.tcpConn.CloseWrite()
-			conn.tcpConn.CloseRead()
 			conn.tcpConn.Close()
 		}
 	}

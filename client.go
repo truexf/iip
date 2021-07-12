@@ -6,6 +6,7 @@
 package iip
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -28,6 +29,9 @@ type ClientConfig struct {
 type Client struct {
 	DefaultErrorHolder
 	DefaultContext
+	isTls       bool
+	tlsCertFile string
+	tlsKeyFile  string
 	config      ClientConfig
 	serverAddr  string
 	connections []*Connection
@@ -61,6 +65,20 @@ func NewClient(config ClientConfig, serverAddr string) (*Client, error) {
 	return ret, nil
 }
 
+// 创建一个新的client, TLS模式
+func NewClientTLS(config ClientConfig, serverAddr string, certFile, keyFile string) (*Client, error) {
+	ret := &Client{
+		isTls:       true,
+		tlsCertFile: certFile,
+		tlsKeyFile:  keyFile,
+		config:      config,
+		serverAddr:  serverAddr,
+		connections: make([]*Connection, 0),
+		handler:     &clientHandler{pathHandlerManager: &ClientPathHandlerManager{}},
+	}
+	return ret, nil
+}
+
 func (m *Client) Close() {
 	for _, v := range m.connections {
 		v.Close(nil)
@@ -83,9 +101,9 @@ func (m *Client) NewChannel() (*ClientChannel, error) {
 	}
 	c.SetCtx(CtxUncompletedRequestChan, c.uncompletedRequestQueue)
 	c.SetCtx(CtxClient, m)
-	bts, err := c.DoRequest(PathNewChannel, NewDefaultRequest([]byte("{}")), time.Second*3)
+	bts, err := c.DoRequest(PathNewChannel, NewDefaultRequest([]byte("{}")), time.Second*5)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new sys channel fail, %s", err.Error())
 	}
 
 	var resp ResponseNewChannel
@@ -109,22 +127,45 @@ func (m *Client) NewChannel() (*ClientChannel, error) {
 	}
 }
 
-func (m *Client) newConnection() (*Connection, error) {
-	conn, err := net.DialTimeout("tcp4", m.serverAddr, m.config.TcpConnectTimeout)
+func (m *Client) dialTLS() (net.Conn, error) {
+	log.Logf("dail tls")
+	cert, err := tls.LoadX509KeyPair(m.tlsCertFile, m.tlsKeyFile)
 	if err != nil {
 		return nil, err
 	}
-	tcpConn := conn.(*net.TCPConn)
-	ret, err := NewConnection(m, nil, tcpConn, RoleClient, int(m.config.TcpWriteQueueLen))
+	config := tls.Config{Certificates: []tls.Certificate{cert}, InsecureSkipVerify: true}
+	conn, err := tls.Dial("tcp4", m.serverAddr, &config)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+func (m *Client) newConnection() (*Connection, error) {
+	var conn net.Conn
+	var err error
+	if !m.isTls {
+		conn, err = net.DialTimeout("tcp4", m.serverAddr, m.config.TcpConnectTimeout)
+	} else {
+		conn, err = m.dialTLS()
+	}
+	if err != nil {
+		return nil, err
+	}
+	// tcpConn := conn.(*net.TCPConn)
+	ret, err := NewConnection(m, nil, conn, RoleClient, int(m.config.TcpWriteQueueLen))
 	if err != nil {
 		return nil, err
 	}
 	ret.SetCtxData(CtxClient, m)
 
-	tcpConn.SetKeepAlive(true)
-	tcpConn.SetKeepAlivePeriod(time.Second * 15)
-	tcpConn.SetReadBuffer(m.config.TcpReadBufferSize)
-	tcpConn.SetWriteBuffer(m.config.TcpWriteBufferSize)
+	if !m.isTls {
+		tcpConn := conn.(*net.TCPConn)
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(time.Second * 15)
+		tcpConn.SetReadBuffer(m.config.TcpReadBufferSize)
+		tcpConn.SetWriteBuffer(m.config.TcpWriteBufferSize)
+	}
 
 	m.connLock.Lock()
 	m.connections = append(m.connections, ret)
@@ -162,6 +203,9 @@ func (m *Client) getFreeConnection() (*Connection, error) {
 	var err error
 	if conn == nil {
 		conn, err = m.newConnection()
+		if err != nil {
+			log.Errorf("connect server fail, %s\n", err.Error())
+		}
 	}
 	return conn, err
 }
