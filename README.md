@@ -1,6 +1,6 @@
 ## 使用说明
-* client示例: [example/echo_client.go](https://github.com/truexf/iip/blob/master/example/echo/echo_client.go)
-* server示例: [example/echo_server.go](https://github.com/truexf/iip/blob/master/example/echo/echo_server.go)
+* client示例: [example/echo_client.go](https://github.com/truexf/iip/blob/master/example/echo_client/echo_client.go)
+* server示例: [example/echo_server.go](https://github.com/truexf/iip/blob/master/example/echo_server/echo_server.go)
 * benchmark: [client_server_test.go](https://github.com/truexf/iip/blob/master/client_server_test.go)
 
 ## http1、http2、iip

@@ -14,7 +14,7 @@ func (m *EchoClientHandlerTest) Handle(path string, request Request, responseDat
 	return nil
 }
 
-//跑这个测试前须先在9090端口启动echo_server, echo_server在example/echo_server.go
+//跑这个测试前须先在9090端口启动echo_server, echo_server在example/echo_server/echo_server.go
 func BenchmarkEchoClientServer(t *testing.B) {
 	LogClosing = false
 	for i := 0; i < t.N; i++ {
