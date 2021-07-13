@@ -53,14 +53,16 @@ func BenchmarkEchoClientServer(t *testing.B) {
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest` + fmt.Sprintf("%d", time.Now().UnixNano()))
-				bts, err := channel.DoRequest("/echo_benchmark", NewDefaultRequest(echoData), time.Second)
-				if err != nil {
-					c <- fmt.Errorf(err.Error())
-					return
-				}
-				if !bytes.Equal(bts, echoData) {
-					c <- fmt.Errorf("response not same as request")
-					return
+				for x := 0; x < 3; x++ {
+					bts, err := channel.DoRequest("/echo_benchmark", NewDefaultRequest(echoData), time.Second)
+					if err != nil {
+						c <- fmt.Errorf(err.Error())
+						return
+					}
+					if !bytes.Equal(bts, echoData) {
+						c <- fmt.Errorf("response not same as request")
+						return
+					}
 				}
 				channel.Close(nil)
 				client.Close()
