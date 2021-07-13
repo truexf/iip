@@ -39,14 +39,14 @@ func main() {
 		TcpWriteQueueLen:      1000,
 		TcpReadBufferSize:     16 * 1024 * 1024,
 		TcpWriteBufferSize:    16 * 1024 * 1024,
-	}, ":9090")
+	}, ":9090", nil)
 
 	if err != nil {
 		fmt.Println(err.Error())
 	}
 	echoHandler := &EchoServerHandler{}
-	server.RegisterHandler("/echo", echoHandler)
-	server.RegisterHandler("/echo_benchmark", echoHandler)
+	server.RegisterHandler("/echo", echoHandler, nil)
+	server.RegisterHandler("/echo_benchmark", echoHandler, nil)
 	flag.Parse()
 	tp := ""
 	if *certFile != "" && *keyFile != "" {

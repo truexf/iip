@@ -16,6 +16,7 @@ func (m *EchoClientHandlerTest) Handle(path string, request Request, responseDat
 
 //跑这个测试前须先在9090端口启动echo_server, echo_server在example/echo_server.go
 func BenchmarkEchoClientServer(t *testing.B) {
+	LogClosing = false
 	for i := 0; i < t.N; i++ {
 		//同时3个并发，测试channel是否在并发情况下是否有串扰
 		c := make(chan error, 3)
@@ -29,7 +30,7 @@ func BenchmarkEchoClientServer(t *testing.B) {
 					TcpReadBufferSize:     16 * 1024 * 1024,
 					TcpWriteBufferSize:    16 * 1024 * 1024,
 					TcpConnectTimeout:     time.Second * 3,
-				}, ":9090")
+				}, ":9090", nil)
 				if err != nil {
 					c <- fmt.Errorf("connect server fail")
 					return
@@ -52,7 +53,6 @@ func BenchmarkEchoClientServer(t *testing.B) {
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest` + fmt.Sprintf("%d", time.Now().UnixNano()))
-
 				bts, err := channel.DoRequest("/echo_benchmark", NewDefaultRequest(echoData), time.Second)
 				if err != nil {
 					c <- fmt.Errorf(err.Error())

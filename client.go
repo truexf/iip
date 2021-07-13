@@ -37,6 +37,8 @@ type Client struct {
 	connections []*Connection
 	connLock    sync.Mutex
 	handler     *clientHandler
+	Count       *Count
+	Measure     *Measure
 }
 
 type ClientChannel struct {
@@ -55,18 +57,20 @@ type ClientChannel struct {
 }
 
 // 创建一个新的client
-func NewClient(config ClientConfig, serverAddr string) (*Client, error) {
+func NewClient(config ClientConfig, serverAddr string, timeCountRangeFunc EnsureTimeRangeFunc) (*Client, error) {
 	ret := &Client{
 		config:      config,
 		serverAddr:  serverAddr,
 		connections: make([]*Connection, 0),
 		handler:     &clientHandler{pathHandlerManager: &ClientPathHandlerManager{}},
+		Count:       &Count{},
+		Measure:     NewMesure(timeCountRangeFunc),
 	}
 	return ret, nil
 }
 
 // 创建一个新的client, TLS模式
-func NewClientTLS(config ClientConfig, serverAddr string, certFile, keyFile string) (*Client, error) {
+func NewClientTLS(config ClientConfig, serverAddr string, timeCountRangeFunc EnsureTimeRangeFunc, certFile, keyFile string) (*Client, error) {
 	ret := &Client{
 		isTls:       true,
 		tlsCertFile: certFile,
@@ -75,6 +79,8 @@ func NewClientTLS(config ClientConfig, serverAddr string, certFile, keyFile stri
 		serverAddr:  serverAddr,
 		connections: make([]*Connection, 0),
 		handler:     &clientHandler{pathHandlerManager: &ClientPathHandlerManager{}},
+		Count:       &Count{},
+		Measure:     NewMesure(timeCountRangeFunc),
 	}
 	return ret, nil
 }
@@ -159,11 +165,13 @@ func (m *Client) newConnection() (*Connection, error) {
 	}
 	ret.SetCtxData(CtxClient, m)
 
-	tcpConn := conn.(*net.TCPConn)
-	tcpConn.SetKeepAlive(true)
-	tcpConn.SetKeepAlivePeriod(time.Second * 15)
-	tcpConn.SetReadBuffer(m.config.TcpReadBufferSize)
-	tcpConn.SetWriteBuffer(m.config.TcpWriteBufferSize)
+	if !m.isTls {
+		tcpConn := conn.(*net.TCPConn)
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(time.Second * 15)
+		tcpConn.SetReadBuffer(m.config.TcpReadBufferSize)
+		tcpConn.SetWriteBuffer(m.config.TcpWriteBufferSize)
+	}
 
 	m.connLock.Lock()
 	m.connections = append(m.connections, ret)
@@ -226,7 +234,7 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 		return nil, fmt.Errorf("this channel is invalid, [%s]", m.internalChannel.err.Error())
 	}
 	if !ValidatePath(path) {
-		return nil, fmt.Errorf("invalid path: %s", path)
+		return nil, fmt.Errorf("invalid path of request: %s", path)
 	}
 
 	pkt := &Packet{

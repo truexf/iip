@@ -8,6 +8,7 @@ package iip
 import (
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
 	"sync"
@@ -35,18 +36,52 @@ type Server struct {
 	connections map[string]*Connection //key: remote addr for client
 	connLock    sync.Mutex
 	closeNotify chan int
+	handler     *serverHandler
 
-	handler *serverHandler
+	//statis
+	count       *Count
+	measure     *Measure
+	pathCount   map[string]*Count   //key: path
+	pathMeasure map[string]*Measure //key: path
+	statisLock  sync.RWMutex
 }
 
-func NewServer(config ServerConfig, listenAddr string) (*Server, error) {
+func NewServer(config ServerConfig, listenAddr string, timeCountRangeFunc EnsureTimeRangeFunc) (*Server, error) {
 	ret := &Server{
 		config:      config,
 		listenAddr:  listenAddr,
 		connections: make(map[string]*Connection),
 		handler:     &serverHandler{pathHandlerManager: &ServerPathHandlerManager{}},
+		count:       &Count{},
+		measure:     NewMesure(timeCountRangeFunc),
+		pathCount:   make(map[string]*Count),
+		pathMeasure: make(map[string]*Measure),
 	}
+
+	ret.RegisterHandler(PathServerCountJson, ret, EnsureTimeRangeMicroSecond)
+	ret.RegisterHandler(PathServerMeasureJson, ret, EnsureTimeRangeMicroSecond)
+	ret.RegisterHandler(PathServerPathCountJson, ret, EnsureTimeRangeMicroSecond)
+	ret.RegisterHandler(PathServerPathMeasureJson, ret, EnsureTimeRangeMicroSecond)
+
 	return ret, nil
+}
+
+func (m *Server) AddCount(path string, count Count) {
+	m.statisLock.RLock()
+	defer m.statisLock.RLock()
+	if cnt, ok := m.pathCount[path]; ok {
+		cnt.Add(count)
+		m.count.Add(count)
+	}
+}
+
+func (m *Server) AddMeasure(path string, reqCount int64, duration time.Duration) {
+	m.statisLock.RLock()
+	defer m.statisLock.RLock()
+	if me, ok := m.pathMeasure[path]; ok {
+		me.Add(reqCount, duration)
+		m.measure.Add(reqCount, duration)
+	}
 }
 
 func (m *Server) acceptConn() (*Connection, error) {
@@ -165,10 +200,43 @@ func (m *Server) Stop(err error) {
 	close(m.closeNotify)
 }
 
-func (m *Server) RegisterHandler(path string, handler ServerPathHandler) error {
-	return m.handler.pathHandlerManager.registerHandler(path, handler)
+func (m *Server) RegisterHandler(path string, handler ServerPathHandler, timeCountRangeFunc EnsureTimeRangeFunc) error {
+	ret := m.handler.pathHandlerManager.registerHandler(path, handler)
+	m.statisLock.Lock()
+	defer m.statisLock.Unlock()
+	m.pathCount[path] = &Count{}
+	m.pathMeasure[path] = NewMesure(timeCountRangeFunc)
+	return ret
 }
 
 func (m *Server) UnRegisterHandler(path string) {
 	m.handler.pathHandlerManager.unRegisterHandler(path)
+}
+
+func (m *Server) Handle(path string, requestData []byte, dataCompleted bool) (respData []byte, e error) {
+	switch path {
+	case PathServerCountJson:
+		return json.Marshal(m.count)
+	case PathServerMeasureJson:
+		return m.measure.Json(), nil
+	case PathServerPathCountJson:
+		if !dataCompleted {
+			return nil, nil
+		}
+		m.statisLock.RLock()
+		defer m.statisLock.RUnlock()
+		if cnt, ok := m.pathCount[string(requestData)]; ok {
+			return json.Marshal(cnt)
+		}
+	case PathServerPathMeasureJson:
+		if !dataCompleted {
+			return nil, nil
+		}
+		m.statisLock.RLock()
+		defer m.statisLock.RUnlock()
+		if ms, ok := m.pathMeasure[string(requestData)]; ok {
+			return ms.Json(), nil
+		}
+	}
+	return nil, fmt.Errorf("path [%s] not support", path)
 }

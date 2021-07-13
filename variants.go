@@ -6,7 +6,8 @@ package iip
 
 //系统变量定义
 var (
-	DefaultResponseData = []byte(`{"code": -1, "message": "unknown"}`)
+	DefaultResponseData      = []byte(`{"code": -1, "message": "unknown"}`)
+	LogClosing          bool = true //channel, connection关闭的时候记录日志
 
 	ErrPacketContinue   error = &Error{Code: 100, Message: "packet uncompleted"}
 	ErrHandleNoResponse error = &Error{Code: 101, Message: "handle no response"}

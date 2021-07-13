@@ -19,14 +19,6 @@ import (
 	"github.com/truexf/goutil"
 )
 
-func isClientStatus(status byte) bool {
-	return status == StatusC0 || status == StatusC1 || status == StatusC2 || status == StatusC3
-}
-
-func isServerStatus(status byte) bool {
-	return status == StatusS4 || status == StatusS5 || status == StatusS6 || status == StatusS7
-}
-
 func isClientStatusCompleted(status byte) bool {
 	return status == StatusC1 || status == StatusC3
 }
@@ -77,7 +69,7 @@ func CreateNetPacket(pkt *Packet) ([]byte, error) {
 	if len(pkt.Data) > int(MaxPacketSize) {
 		return nil, fmt.Errorf("data is too large, must be <= %d bytes", MaxPacketSize)
 	}
-	if !ValidatePath(pkt.Path) {
+	if pkt.Status != Status8 && !ValidatePath(pkt.Path) {
 		return nil, fmt.Errorf("invalid path: %s", pkt.Path)
 	}
 	pktLen := 1 + len(pkt.Path) + 4 + 4 + len(pkt.Data)
@@ -145,7 +137,14 @@ func WritePacket(pkt *Packet, writer io.Writer) (int, error) {
 		return n, fmt.Errorf("writepacket not complete, totoal %d bytes, %d bytes writted. ", len(data), n)
 	}
 	if pkt.channel != nil {
-		pkt.channel.WriteBytes += int64(n)
+		cnt := Count{BytesSent: int64(n)}
+		pkt.channel.Count.Add(cnt)
+		pkt.channel.conn.Count.Add(cnt)
+		if pkt.channel.conn.Role == RoleClient {
+			pkt.channel.conn.Client.Count.Add(cnt)
+		} else {
+			pkt.channel.conn.Server.AddCount(pkt.Path, cnt)
+		}
 	}
 	return n, nil
 }
@@ -190,26 +189,30 @@ func CheckServerPacketStatus(prev, current byte) error {
 type Channel struct {
 	DefaultErrorHolder
 	DefaultContext
-	Id               uint32
-	NewTime          time.Time
-	WritePacketCount int64
-	ReadPacketCount  int64
-	ReadBytes        int64
-	WriteBytes       int64
-	sendLock         sync.Mutex
-	conn             *Connection
-	receivedQueue    chan *Packet //received streamed packet from peer side
-	packetStatus     byte         //recent received packet status
-	closeNotify      chan int
-	closeLock        uint32
+	Id            uint32
+	NewTime       time.Time
+	sendLock      sync.Mutex
+	conn          *Connection
+	receivedQueue chan *Packet //received streamed packet from peer side
+	packetStatus  byte         //recent received packet status
+	closeNotify   chan int
+	closeLock     uint32
+	Count         *Count
 }
 
 func (m *Channel) SendPacket(pkt *Packet) error {
 	if m.err != nil {
 		return fmt.Errorf("current channel is invalid, %s", m.err.Error())
 	}
+
 	m.sendLock.Lock()
 	defer m.sendLock.Unlock()
+
+	if pkt.Status == Status8 {
+		m.conn.tcpWriteQueue <- pkt
+		return nil
+	}
+
 	if len(pkt.Data) <= int(MaxPacketSize) {
 		if m.conn.Role == RoleClient {
 			pkt.Status = 1
@@ -217,7 +220,15 @@ func (m *Channel) SendPacket(pkt *Packet) error {
 			pkt.Status = 5
 		}
 		m.conn.tcpWriteQueue <- pkt
-		m.WritePacketCount++
+
+		cnt := Count{PacketsSent: 1, WholePacketSent: 1}
+		m.Count.Add(cnt)
+		m.conn.Count.Add(cnt)
+		if m.conn.Role == RoleClient {
+			m.conn.Client.Count.Add(cnt)
+		} else {
+			m.conn.Server.AddCount(pkt.Path, cnt)
+		}
 		return nil
 	}
 	remainDataSize := len(pkt.Data)
@@ -266,6 +277,14 @@ func (m *Channel) SendPacket(pkt *Packet) error {
 			return fmt.Errorf("protocol error")
 		}
 		m.conn.tcpWriteQueue <- chunk
+		cnt := Count{PacketsSent: 1}
+		m.Count.Add(cnt)
+		m.conn.Count.Add(cnt)
+		if m.conn.Role == RoleClient {
+			m.conn.Client.Count.Add(cnt)
+		} else {
+			m.conn.Server.AddCount(pkt.Path, cnt)
+		}
 
 		firstSend = false
 		remainDataSize -= chunkSize
@@ -274,7 +293,14 @@ func (m *Channel) SendPacket(pkt *Packet) error {
 		}
 	}
 
-	m.WritePacketCount++
+	cnt := Count{WholePacketSent: 1}
+	m.Count.Add(cnt)
+	m.conn.Count.Add(cnt)
+	if m.conn.Role == RoleClient {
+		m.conn.Client.Count.Add(cnt)
+	} else {
+		m.conn.Server.AddCount(pkt.Path, cnt)
+	}
 	return nil
 }
 
@@ -300,45 +326,60 @@ func (m *Channel) handleServerLoop() {
 			}
 
 			//handle
-			ret, err := handler.Handle(m, pkt, isClientStatusCompleted(pkt.Status))
-			if err != nil && err != ErrPacketContinue {
-				log.Errorf("handle pkt %s fail, %s", pkt.Path, err.Error())
-				err = ErrHandleError
-			} else if ret == nil {
-				log.Errorf("handle pkt %s fail, %s", pkt.Path, "no response data")
-				err = ErrHandleNoResponse
+			handleBeginTime := time.Now()
+			ret, err := handler.Handle(m, pktWholeRequest, isClientStatusCompleted(pktWholeRequest.Status))
+
+			if m.conn.Role == RoleClient {
+				m.conn.Client.Measure.Add(1, time.Since(handleBeginTime))
 			} else {
-				retPkt := &Packet{
-					Type:      PacketTypeResponse,
-					Path:      pkt.Path,
-					ChannelId: pkt.ChannelId,
-					Data:      ret,
-					channel:   m,
+				m.conn.Server.AddMeasure(pkt.Path, 1, time.Since(handleBeginTime))
+			}
+
+			if isClientStatusCompleted(pktWholeRequest.Status) {
+				if err != nil {
+					log.Errorf("handle pkt %s fail, %s", pkt.Path, err.Error())
+					err = ErrHandleError
+				} else if len(ret) == 0 {
+					log.Errorf("handle pkt %s fail, %s", pkt.Path, "no response data")
+					err = ErrHandleNoResponse
 				}
-				if err := m.SendPacket(retPkt); err != nil {
-					log.Errorf("channel.SendPacket fail, %s", err.Error())
+			} else {
+				if err != nil {
+					log.Errorf("handle pkt %s fail, %s", pkt.Path, err.Error())
+					err = ErrHandleError
 				}
 			}
-			//ErrPacketContine表示数据还没有接收完整，暂时无响应
-			if err != nil && err != ErrPacketContinue {
-				errExt, ok := err.(*Error)
-				if !ok {
-					errExt = &Error{Code: -1, Message: err.Error()}
-				}
+
+			//有响应或发生错误
+			if (err == nil && len(ret) > 0) || err != nil {
 				retPkt := &Packet{
 					Type:      PacketTypeResponse,
 					Path:      pkt.Path,
 					ChannelId: pkt.ChannelId,
-					Data:      ErrorResponse(errExt).Data(),
-					channel:   m,
+					// Data:      ret,
+					channel: m,
+				}
+				if err == nil {
+					retPkt.Data = ret
+				} else {
+					retPkt.Data = ErrorResponse(err.(*Error)).Data()
 				}
 				if err := m.SendPacket(retPkt); err != nil {
 					log.Errorf("channel.SendPacket fail, %s", err.Error())
 				}
 			}
 
-			if isServerStatusCompleted(pkt.Status) {
+			if isClientStatusCompleted(pkt.Status) {
 				pktWholeRequest = nil
+				cnt := Count{WholePacketReceived: 1}
+				m.Count.Add(cnt)
+				m.conn.Count.Add(cnt)
+				if m.conn.Role == RoleClient {
+					m.conn.Client.Count.Add(cnt)
+				} else {
+					m.conn.Server.AddCount(pkt.Path, cnt)
+				}
+
 			}
 
 		}
@@ -386,6 +427,14 @@ func (m *Channel) handleClientLoop() {
 				if respCompletedChan != nil {
 					respCompletedChan.(chan []byte) <- pktWholeResponse.Data
 				}
+				cnt := Count{WholePacketReceived: 1}
+				m.Count.Add(cnt)
+				m.conn.Count.Add(cnt)
+				if m.conn.Role == RoleClient {
+					m.conn.Client.Count.Add(cnt)
+				} else {
+					m.conn.Server.AddCount(pkt.Path, cnt)
+				}
 				pktWholeResponse = nil
 			} else {
 				uncompletedReqQ.PushHead(req, true)
@@ -399,14 +448,16 @@ func (m *Channel) Close(err error) {
 		return
 	}
 	defer atomic.StoreUint32(&m.closeLock, 0)
-	m.SendPacket(&Packet{Type: 8, ChannelId: m.Id, channel: m})
+	// m.SendPacket(&Packet{Status: 8, ChannelId: m.Id, channel: m})
 	m.conn.removeChannel(m)
 	if err != nil {
 		m.err = err
 	} else {
 		m.err = fmt.Errorf("unknown")
 	}
-	log.Errorf("channel closed: %s", m.err.Error())
+	if LogClosing {
+		log.Errorf("channel closed: %s", m.err.Error())
+	}
 	if m.closeNotify != nil {
 		close(m.closeNotify)
 		m.closeNotify = nil
@@ -416,7 +467,9 @@ func (m *Channel) Close(err error) {
 type Connection struct {
 	DefaultErrorHolder
 	DefaultContext
-	Role          byte //0 client, 4 server
+	Role          byte    //0 client, 4 server
+	Client        *Client //not nil if client side
+	Server        *Server //not nil if server side
 	Channels      map[uint32]*Channel
 	MaxChannelId  uint32
 	FreeChannleId map[uint32]struct{}
@@ -425,6 +478,7 @@ type Connection struct {
 	tcpWriteQueue chan *Packet
 	closeNotify   chan int
 	closeLock     uint32
+	Count         *Count
 }
 
 func NewConnection(client *Client, server *Server, netConn net.Conn, role byte, writeQueueLen int) (*Connection, error) {
@@ -433,11 +487,14 @@ func NewConnection(client *Client, server *Server, netConn net.Conn, role byte, 
 	}
 	ret := &Connection{
 		Role:          role,
+		Client:        client,
+		Server:        server,
 		Channels:      make(map[uint32]*Channel),
 		FreeChannleId: make(map[uint32]struct{}),
 		tcpConn:       netConn,
 		tcpWriteQueue: make(chan *Packet, writeQueueLen),
 		closeNotify:   make(chan int, 1),
+		Count:         &Count{},
 	}
 	if client != nil {
 		ret.SetCtxData(CtxClient, client)
@@ -490,7 +547,9 @@ func (m *Connection) Close(err error) {
 	} else {
 		m.err = fmt.Errorf("unknown")
 	}
-	log.Errorf("connection closed, role %d, remote addr: %s, error: %s", m.Role, m.tcpConn.RemoteAddr().String(), m.err.Error())
+	if LogClosing {
+		log.Errorf("connection closed, role %d, remote addr: %s, error: %s", m.Role, m.tcpConn.RemoteAddr().String(), m.err.Error())
+	}
 
 	svr := m.GetCtxData(CtxServer)
 	if svr != nil {
@@ -540,6 +599,7 @@ func (m *Connection) newChannel(sys bool, queueLen uint32, clientCtx map[string]
 		receivedQueue: make(chan *Packet, queueLen),
 		packetStatus:  255,
 		closeNotify:   make(chan int, 1),
+		Count:         &Count{},
 	}
 	if !sys {
 		ret.Id = m.makeNewChannelId()
@@ -652,8 +712,14 @@ func (m *Connection) clientReadLoop() {
 			return
 		}
 		channel.packetStatus = status
-		channel.ReadPacketCount++
-		channel.ReadBytes += int64(len(pkt.Data) + 1 + len(pkt.Path) + 1 + 4 + 4)
+		cnt := Count{PacketReceived: 1, BytesReceived: int64(len(pkt.Data) + 1 + len(pkt.Path) + 1 + 4 + 4)}
+		channel.Count.Add(cnt)
+		channel.conn.Count.Add(cnt)
+		if channel.conn.Role == RoleClient {
+			channel.conn.Client.Count.Add(cnt)
+		} else {
+			channel.conn.Server.AddCount(pkt.Path, cnt)
+		}
 		channel.receivedQueue <- pkt
 	}
 }
@@ -726,8 +792,7 @@ func (m *Connection) serverReadLoop() {
 			return
 		}
 		channel.packetStatus = status
-		channel.ReadPacketCount++
-		channel.ReadBytes += int64(len(pkt.Data) + 1 + len(pkt.Path) + 1 + 4 + 4)
+		channel.Count.Add(Count{PacketReceived: 1, BytesReceived: int64(len(pkt.Data) + 1 + len(pkt.Path) + 1 + 4 + 4)})
 		channel.receivedQueue <- pkt
 	}
 }

@@ -140,6 +140,13 @@ type ClientPathHandler interface {
 	Handle(path string, request Request, responseData []byte, dataCompleted bool) error
 }
 
+type DefaultClientPathHandler struct {
+}
+
+func (m *DefaultClientPathHandler) Handle(path string, request Request, responseData []byte, dataCompleted bool) error {
+	return nil
+}
+
 type ServerPathHandler interface {
 	Handle(path string, requestData []byte, dataCompleted bool) (respData []byte, e error)
 }
@@ -196,15 +203,15 @@ func (m *clientHandler) Handle(c *Channel, response *Packet, dataCompleted bool)
 	default:
 		pathHandler := m.pathHandlerManager.getHandler(response.Path)
 		if pathHandler == nil {
-			bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "no handler"})
-			return bts, nil
-		} else {
-			err := pathHandler.Handle(response.Path, c.GetCtxData(CtxRequest).(Request), response.Data, dataCompleted)
-			if err != nil {
-				return nil, err
-			} else {
-				return nil, nil
-			}
+			pathHandler = &DefaultClientPathHandler{}
 		}
+
+		err := pathHandler.Handle(response.Path, c.GetCtxData(CtxRequest).(Request), response.Data, dataCompleted)
+		if err != nil {
+			return nil, err
+		} else {
+			return nil, nil
+		}
+
 	}
 }

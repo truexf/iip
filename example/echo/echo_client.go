@@ -29,8 +29,8 @@ func main() {
 	var client *iip.Client
 	var err error
 	flag.Parse()
-	fmt.Printf("certfile: %s, keyfile: %s\n", *certFileClient)
 	if *certFileClient != "" && *keyFileClient != "" {
+		fmt.Printf("certfile: %s, keyfile: %s\n", *certFileClient, *keyFileClient)
 		client, err = iip.NewClientTLS(
 			iip.ClientConfig{
 				MaxConnections:        1000,
@@ -42,6 +42,7 @@ func main() {
 				TcpConnectTimeout:     time.Second * 3,
 			},
 			":9090",
+			nil,
 			*certFileClient,
 			*keyFileClient,
 		)
@@ -57,6 +58,7 @@ func main() {
 				TcpConnectTimeout:     time.Second * 3,
 			},
 			":9090",
+			nil,
 		)
 	}
 	if err != nil {
