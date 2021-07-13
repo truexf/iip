@@ -33,7 +33,7 @@ func (m *DefaultLogger) Logf(format string, args ...interface{}) {
 	if len(s) == 0 || s[len(s)-1] != '\n' {
 		s += "\n"
 	}
-	fmt.Printf(s)
+	fmt.Print(s)
 
 }
 func (m *DefaultLogger) Warn(s string) {
@@ -57,7 +57,7 @@ func (m *DefaultLogger) Errorf(format string, args ...interface{}) {
 	if len(s) == 0 || s[len(s)-1] != '\n' {
 		s += "\n"
 	}
-	fmt.Errorf(s)
+	os.Stderr.WriteString(s)
 }
 
 var log Logger = &DefaultLogger{}
