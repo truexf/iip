@@ -244,6 +244,9 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 		Data:      request.Data(),
 		channel:   m.internalChannel,
 	}
+	if len(pkt.Data) == 0 {
+		return nil, fmt.Errorf("request.Data() is nil")
+	}
 	respChan := make(chan []byte)
 	request.SetCtxData(CtxResponseChan, respChan)
 	m.sendRequestLock.Lock()
@@ -293,6 +296,9 @@ func (m *ClientChannel) DoStreamRequest(path string, request Request) error {
 		ChannelId: m.internalChannel.Id,
 		Data:      request.Data(),
 		channel:   m.internalChannel,
+	}
+	if len(pkt.Data) == 0 {
+		return fmt.Errorf("request.Data() is nil")
 	}
 	m.sendRequestLock.Lock()
 	defer m.sendRequestLock.Unlock()
