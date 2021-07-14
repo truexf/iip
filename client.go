@@ -284,8 +284,14 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 
 // 用于于流式请求/响应（用户自己注册处理Handler，每接收到一部分响应数据，系统会调用Handler一次，这个调用是异步的，发送函数立即返回）
 func (m *ClientChannel) DoStreamRequest(path string, request Request) error {
-	if m.internalChannel != nil && m.internalChannel.err != nil {
-		return fmt.Errorf("this channel is invalid, [%s]", m.internalChannel.err.Error())
+	if m == nil {
+		time.Sleep(time.Second)
+		panic("client channel is nil")
+	}
+	if m.internalChannel != nil {
+		if m.internalChannel.err != nil {
+			return fmt.Errorf("this channel is invalid, [%s]", m.internalChannel.err.Error())
+		}
 	}
 	if !ValidatePath(path) {
 		return fmt.Errorf("invalid path: %s", path)
@@ -307,7 +313,7 @@ func (m *ClientChannel) DoStreamRequest(path string, request Request) error {
 	if err := m.internalChannel.SendPacket(pkt); err != nil {
 		return err
 	} else {
-		m.uncompletedRequestQueue.PushTail(request.Data(), true)
+		m.uncompletedRequestQueue.PushTail(request, true)
 	}
 
 	return nil
