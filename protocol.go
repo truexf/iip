@@ -41,7 +41,7 @@ type Packet struct {
 	Path      string `json:"path"`
 	ChannelId uint32 `json:"channel_id"`
 	Data      []byte `json:"data"`
-	DontChunk bool   `json:"dont_break` //禁止分成多个packet传输
+	DontChunk bool   //禁止分成多个packet传输
 	channel   *Channel
 }
 
@@ -329,12 +329,7 @@ func (m *Channel) handleServerLoop() {
 			//handle
 			handleBeginTime := time.Now()
 			ret, err := handler.Handle(m, pktWholeRequest, isClientStatusCompleted(pktWholeRequest.Status))
-
-			if m.conn.Role == RoleClient {
-				m.conn.Client.Measure.Add(1, time.Since(handleBeginTime))
-			} else {
-				m.conn.Server.AddMeasure(pkt.Path, 1, time.Since(handleBeginTime))
-			}
+			m.conn.Server.AddMeasure(pkt.Path, 1, time.Since(handleBeginTime))
 
 			if isClientStatusCompleted(pktWholeRequest.Status) {
 				if err != nil {
@@ -351,7 +346,7 @@ func (m *Channel) handleServerLoop() {
 				}
 			}
 
-			//有响应或发生错误
+			// 有响应或发生错误
 			if (err == nil && len(ret) > 0) || err != nil {
 				retPkt := &Packet{
 					Type:      PacketTypeResponse,
@@ -362,7 +357,7 @@ func (m *Channel) handleServerLoop() {
 				}
 				if err == nil {
 					retPkt.Data = ret
-				} else {
+				} else if err != nil {
 					retPkt.Data = ErrorResponse(err.(*Error)).Data()
 				}
 				if err := m.SendPacket(retPkt); err != nil {
@@ -418,7 +413,9 @@ func (m *Channel) handleClientLoop() {
 			}
 			req := reqi.(Request)
 			m.SetCtxData(CtxRequest, req)
+			handleBeginTime := time.Now()
 			_, err := handler.Handle(m, pktWholeResponse, isServerStatusCompleted(pkt.Status))
+			m.conn.Client.Measure.Add(1, time.Since(handleBeginTime))
 			if err != nil {
 				log.Errorf("handle pkt %s fail, %s", pkt.Path, err.Error())
 			}

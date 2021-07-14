@@ -41,17 +41,17 @@ func ErrorResponse(err *Error) *ResponseHandleFail {
 
 //管理ServerPathHandler,从属于一个server
 type ServerPathHandlerManager struct {
-	HanderMap map[string]ServerPathHandler
+	HandlerMap map[string]ServerPathHandler
 	sync.Mutex
 }
 
 func (m *ServerPathHandlerManager) getHandler(path string) ServerPathHandler {
 	m.Lock()
 	defer m.Unlock()
-	if m.HanderMap == nil {
-		m.HanderMap = make(map[string]ServerPathHandler)
+	if m.HandlerMap == nil {
+		m.HandlerMap = make(map[string]ServerPathHandler)
 	}
-	if ret, ok := m.HanderMap[path]; ok {
+	if ret, ok := m.HandlerMap[path]; ok {
 		return ret
 	}
 	return nil
@@ -69,20 +69,20 @@ func (m *ServerPathHandlerManager) registerHandler(path string, handler ServerPa
 	}
 	m.Lock()
 	defer m.Unlock()
-	if m.HanderMap == nil {
-		m.HanderMap = make(map[string]ServerPathHandler)
+	if m.HandlerMap == nil {
+		m.HandlerMap = make(map[string]ServerPathHandler)
 	}
-	m.HanderMap[path] = handler
+	m.HandlerMap[path] = handler
 	return nil
 }
 
 func (m *ServerPathHandlerManager) unRegisterHandler(path string) {
 	m.Lock()
 	defer m.Unlock()
-	if m.HanderMap == nil {
-		m.HanderMap = make(map[string]ServerPathHandler)
+	if m.HandlerMap == nil {
+		m.HandlerMap = make(map[string]ServerPathHandler)
 	}
-	delete(m.HanderMap, path)
+	delete(m.HandlerMap, path)
 }
 
 //管理ClientPathHandler,从属于一个client
@@ -133,11 +133,11 @@ func (m *ClientPathHandlerManager) unRegisterHandler(path string) {
 
 //packet handler接口
 type Handler interface {
-	Handle(c *Channel, data *Packet, dataCompleted bool) ([]byte, error)
+	Handle(c *Channel, request *Packet, dataCompleted bool) ([]byte, error)
 }
 
 type ClientPathHandler interface {
-	Handle(path string, request Request, responseData []byte, dataCompleted bool) error
+	Handle(path string, request Request, responseData []byte, responseDataCompleted bool) error
 }
 
 type DefaultClientPathHandler struct {
@@ -147,8 +147,9 @@ func (m *DefaultClientPathHandler) Handle(path string, request Request, response
 	return nil
 }
 
+// 普通响应，必须实现
 type ServerPathHandler interface {
-	Handle(path string, requestData []byte, dataCompleted bool) (respData []byte, e error)
+	Handle(path string, requestData []byte, requestDataCompleted bool) (responseData []byte, e error)
 }
 
 type serverHandler struct {
@@ -172,16 +173,14 @@ func (m *serverHandler) Handle(c *Channel, request *Packet, dataCompleted bool) 
 	default:
 		pathHandler := m.pathHandlerManager.getHandler(request.Path)
 		if pathHandler == nil {
-			bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "no handler"})
+			return nil, ErrResponseHandlerNotImplement
+		}
+		ret, err := pathHandler.Handle(request.Path, request.Data, dataCompleted)
+		if err != nil {
+			bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "handler fail:" + err.Error()})
 			return bts, nil
 		} else {
-			ret, err := pathHandler.Handle(request.Path, request.Data, dataCompleted)
-			if err != nil {
-				bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "handler fail:" + err.Error()})
-				return bts, nil
-			} else {
-				return ret, nil
-			}
+			return ret, nil
 		}
 	}
 }
