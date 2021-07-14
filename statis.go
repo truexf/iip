@@ -181,7 +181,7 @@ func (m *Measure) Json() []byte {
 	m.Lock()
 	defer m.Unlock()
 
-	if ret, err := json.MarshalIndent(m, "", "    "); err == nil {
+	if ret, err := json.Marshal(m); err == nil {
 		return ret
 	}
 	return nil
