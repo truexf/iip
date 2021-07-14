@@ -89,7 +89,7 @@ func (m *FileDownloadClient) newTaskId() int64 {
 	return atomic.AddInt64(&m.maxTaskId, 1)
 }
 
-// 其格式为： 4字节下载完成标记+4字节文件数据
+// 其格式为： 4字节下载完成标记+文件数据
 func (m *FileDownloadClient) unmarshalFileDownloadResponseChunk(req iip.Request, netResponse []byte) error {
 	task := req.(*FileDownloadRequest).GetCtxData("task").(*FileDownloadTaskClientSide)
 	if len(netResponse) < 4 {
