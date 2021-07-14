@@ -13,10 +13,11 @@ const (
 	//系统路径
 	PathNewChannel            string = "/sys/new_channel"
 	PathDeleteChannel         string = "/sys/delete_channel"
-	PathServerCountJson       string = "/sys/server_count"   //获取服务器状态统计信息
-	PathServerMeasureJson     string = "/sys/server_measure" //获取服务器状态统计信息
-	PathServerPathCountJson   string = "/sys/path_count"     //获取服务器状态统计信息
-	PathServerPathMeasureJson string = "/sys/path_measure"   //获取服务器状态统计信息
+	PathServerCountJson       string = "/sys/server_count"   //获取服务器统计信息
+	PathServerMeasureJson     string = "/sys/server_measure" //获取服务器测量信息
+	PathServerPathCountJson   string = "/sys/path_count"     //获取指定接口统计信息
+	PathServerPathMeasureJson string = "/sys/path_measure"   //获取指定接口测量信息
+	PathServerStatis          string = "/sys/statis"         //获取服务器完整测量统计信息
 
 	//角色
 	RoleClient byte = 0
