@@ -1,3 +1,7 @@
+// Copyright 2021 fangyousong(方友松). All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
 package iip
 
 import (
@@ -25,25 +29,31 @@ func TestServerCount(t *testing.T) {
 		t.Fatalf("new channel fail, %s", err.Error())
 		return
 	}
-	echoData := []byte("{}")
-	bts, err := channel.DoRequest(PathServerCountJson, NewDefaultRequest(echoData), time.Second)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	fmt.Println(string(bts))
-	bts, err = channel.DoRequest(PathServerMeasureJson, NewDefaultRequest(echoData), time.Second)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	fmt.Println(string(bts))
-	echoData = []byte("/echo")
-	bts, err = channel.DoRequest(PathServerPathCountJson, NewDefaultRequest(echoData), time.Second)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	fmt.Println(string(bts))
-	echoData = []byte("/echo")
-	bts, err = channel.DoRequest(PathServerPathMeasureJson, NewDefaultRequest(echoData), time.Second)
+	// echoData := []byte("{}")
+	// bts, err := channel.DoRequest(PathServerCountJson, NewDefaultRequest(echoData), time.Second)
+	// if err != nil {
+	// 	t.Fatalf(err.Error())
+	// }
+	// fmt.Println(string(bts))
+	// bts, err = channel.DoRequest(PathServerMeasureJson, NewDefaultRequest(echoData), time.Second)
+	// if err != nil {
+	// 	t.Fatalf(err.Error())
+	// }
+	// fmt.Println(string(bts))
+	// echoData = []byte("/echo")
+	// bts, err = channel.DoRequest(PathServerPathCountJson, NewDefaultRequest(echoData), time.Second)
+	// if err != nil {
+	// 	t.Fatalf(err.Error())
+	// }
+	// fmt.Println(string(bts))
+	// echoData = []byte("/echo")
+	// bts, err = channel.DoRequest(PathServerPathMeasureJson, NewDefaultRequest(echoData), time.Second)
+	// if err != nil {
+	// 	t.Fatalf(err.Error())
+	// }
+	// fmt.Println(string(bts))
+	echoData := []byte(`{"time_unit": "microsecond"}`)
+	bts, err := channel.DoRequest(PathServerStatis, NewDefaultRequest(echoData), time.Second)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
