@@ -214,7 +214,7 @@ func (m *Channel) SendPacket(pkt *Packet) error {
 		return nil
 	}
 
-	if len(pkt.Data) <= int(MaxPacketSize) || noBreak {
+	if len(pkt.Data) <= int(MaxPacketSize) || pkt.DontChunk {
 		if m.conn.Role == RoleClient {
 			pkt.Status = 1
 		} else if m.conn.Role == RoleServer {
