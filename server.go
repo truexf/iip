@@ -62,6 +62,7 @@ func NewServer(config ServerConfig, listenAddr string, timeCountRangeFunc Ensure
 	ret.RegisterHandler(PathServerMeasureJson, ret, EnsureTimeRangeMicroSecond)
 	ret.RegisterHandler(PathServerPathCountJson, ret, EnsureTimeRangeMicroSecond)
 	ret.RegisterHandler(PathServerPathMeasureJson, ret, EnsureTimeRangeMicroSecond)
+	ret.RegisterHandler(PathServerStatis, ret, EnsureTimeRangeMicroSecond)
 
 	return ret, nil
 }
@@ -213,6 +214,47 @@ func (m *Server) UnRegisterHandler(path string) {
 	m.handler.pathHandlerManager.unRegisterHandler(path)
 }
 
+func (m *Server) handleStatis(requestData []byte) (respData []byte, e error) {
+	m.statisLock.RLock()
+	defer m.statisLock.RUnlock()
+	pathList := make([]string, 0, len(m.pathCount))
+	for path := range m.pathCount {
+		pathList = append(pathList, path)
+	}
+
+	// 性能统计信息中请求处理耗时的时间单位，默认以微秒计
+	tmUnit := time.Microsecond
+	reqMap := make(map[string]interface{})
+	if err := json.Unmarshal(requestData, &reqMap); err == nil {
+		if ut, ok := reqMap["time_unit"]; ok {
+			if utStr, ok := ut.(string); ok {
+				if utStr == "microsecond" {
+					tmUnit = time.Microsecond
+				} else if utStr == "millisecond" {
+					tmUnit = time.Millisecond
+				} else if utStr == "second" {
+					tmUnit = time.Second
+				} else if utStr == "nanosecond" {
+					tmUnit = time.Nanosecond
+				}
+			}
+		}
+	}
+
+	ret := ""
+	bts, _ := json.Marshal(m.count)
+	ret += fmt.Sprintf("total count: %s\n", string(bts))
+	ret += fmt.Sprintf("total measure: \n%s\n-----------------------------------\n", m.measure.String(tmUnit))
+	for _, v := range pathList {
+		cnt := m.pathCount[v]
+		mea := m.pathMeasure[v]
+		bts, _ := json.Marshal(cnt)
+		ret += fmt.Sprintf("%s count: %s\n", v, string(bts))
+		ret += fmt.Sprintf("%s measure: \n%s\n\n", v, mea.String(tmUnit))
+	}
+	return []byte(ret), nil
+}
+
 func (m *Server) Handle(path string, requestData []byte, dataCompleted bool) (respData []byte, e error) {
 	switch path {
 	case PathServerCountJson:
@@ -237,6 +279,12 @@ func (m *Server) Handle(path string, requestData []byte, dataCompleted bool) (re
 		if ms, ok := m.pathMeasure[string(requestData)]; ok {
 			return ms.Json(), nil
 		}
+	case PathServerStatis:
+		if !dataCompleted {
+			return nil, nil
+		}
+		return m.handleStatis(requestData)
+
 	}
 	return nil, fmt.Errorf("path [%s] not support", path)
 }
