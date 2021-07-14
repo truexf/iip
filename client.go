@@ -243,6 +243,7 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 		ChannelId: m.internalChannel.Id,
 		Data:      request.Data(),
 		channel:   m.internalChannel,
+		DontChunk: true,
 	}
 	if len(pkt.Data) == 0 {
 		return nil, fmt.Errorf("request.Data() is nil")
@@ -296,6 +297,7 @@ func (m *ClientChannel) DoStreamRequest(path string, request Request) error {
 		ChannelId: m.internalChannel.Id,
 		Data:      request.Data(),
 		channel:   m.internalChannel,
+		DontChunk: true,
 	}
 	if len(pkt.Data) == 0 {
 		return fmt.Errorf("request.Data() is nil")

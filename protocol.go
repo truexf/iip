@@ -41,6 +41,7 @@ type Packet struct {
 	Path      string `json:"path"`
 	ChannelId uint32 `json:"channel_id"`
 	Data      []byte `json:"data"`
+	DontChunk bool   `json:"dont_break` //禁止分成多个packet传输
 	channel   *Channel
 }
 
@@ -213,7 +214,7 @@ func (m *Channel) SendPacket(pkt *Packet) error {
 		return nil
 	}
 
-	if len(pkt.Data) <= int(MaxPacketSize) {
+	if len(pkt.Data) <= int(MaxPacketSize) || noBreak {
 		if m.conn.Role == RoleClient {
 			pkt.Status = 1
 		} else if m.conn.Role == RoleServer {
