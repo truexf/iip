@@ -1,8 +1,8 @@
 ## 使用说明
 * echo回显client示例: [example/echo_client/echo_client.go](https://github.com/truexf/iip/blob/master/example/echo_client/echo_client.go)
 * echo回显server示例: [example/echo_server/echo_server.go](https://github.com/truexf/iip/blob/master/example/echo_server/echo_server.go)
-* 文件下载client示例: [example/file_client/file_client.go](https://github.com/truexf/iip/blob/master/example/file_client/file_client.go)
-* 文件下载server示例: [example/file_server/file_server.go](https://github.com/truexf/iip/blob/master/example/file_server/file_server.go)
+* 文件下载client示例(支持断点续传): [example/file_client/file_client.go](https://github.com/truexf/iip/blob/master/example/file_client/file_client.go)
+* 文件下载server示例(支持断点续传): [example/file_server/file_server.go](https://github.com/truexf/iip/blob/master/example/file_server/file_server.go)
 * benchmark: [client_server_test.go](https://github.com/truexf/iip/blob/master/client_server_test.go)
 
 ## http1、http2、iip
