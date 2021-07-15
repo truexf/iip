@@ -3,6 +3,8 @@
 * echo回显server示例: [example/echo_server/echo_server.go](https://github.com/truexf/iip/blob/master/example/echo_server/echo_server.go)
 * 文件下载client示例(支持断点续传): [example/file_client/file_client.go](https://github.com/truexf/iip/blob/master/example/file_client/file_client.go)
 * 文件下载server示例(支持断点续传): [example/file_server/file_server.go](https://github.com/truexf/iip/blob/master/example/file_server/file_server.go)
+* 文件上传client示例(支持断点续传): [example/upload_client/upload_client.go](https://github.com/truexf/iip/blob/master/example/upload_client/upload_client.go)
+* 文件上传server示例(支持断点续传): [example/upload_server/upload_server.go](https://github.com/truexf/iip/blob/master/example/upload_server/upload_server.go)
 * benchmark: [client_server_test.go](https://github.com/truexf/iip/blob/master/client_server_test.go)
 
 ## IIP是什么？ 
