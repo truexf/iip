@@ -6,6 +6,8 @@
 *.dylib
 example/echo_client/echo_client
 example/echo_server/echo_server
+example/upload_client/upload_client
+example/upload_server/upload_server
 
 # Test binary, built with `go test -c`
 *.test

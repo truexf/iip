@@ -142,7 +142,7 @@ func (m *FileDownloadClient) Handle(path string, request iip.Request, responseDa
 }
 
 var (
-	fileServerAddr = flag.String("server", "", "file_client -server [server-addr] -file [server-file]")
+	fileServerAddr = flag.String("server", ":9091", "file_client -server [server-addr] -file [server-file]")
 	serverFile     = flag.String("file", "", "file_client -server [server-addr] -file [server-file]")
 )
 
