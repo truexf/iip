@@ -115,13 +115,13 @@ func (m *Server) removeConn(addr string) {
 	delete(m.connections, addr)
 }
 
-// listen socket and start server process
-func (m *Server) StartListen() error {
-	lsn, err := net.Listen("tcp4", m.listenAddr)
-	if err != nil {
-		return err
-	}
-	m.tcpListener = lsn
+func (m *Server) Listener() net.Listener {
+	return m.tcpListener
+}
+
+func (m *Server) Serve(listener net.Listener, isTls bool) error {
+	m.tcpListener = listener
+	m.isTls = isTls
 	m.closeNotify = make(chan int)
 
 	go func() {
@@ -143,6 +143,16 @@ func (m *Server) StartListen() error {
 	return nil
 }
 
+// listen socket and start server process
+func (m *Server) StartListen() error {
+	lsn, err := net.Listen("tcp4", m.listenAddr)
+	if err != nil {
+		return err
+	}
+	m.Serve(lsn, false)
+	return nil
+}
+
 // listen socket and start server process in TLS mode
 func (m *Server) StartListenTLS(certFile, keyFile string) error {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
@@ -159,25 +169,7 @@ func (m *Server) StartListenTLS(certFile, keyFile string) error {
 	m.tlsCertFile = certFile
 	m.tlsKeyFile = keyFile
 
-	m.tcpListener = listener
-	m.isTls = true
-	m.closeNotify = make(chan int)
-
-	go func() {
-		for {
-			select {
-			case <-m.closeNotify:
-				return
-			default:
-				if conn, err := m.acceptConn(); err != nil {
-					m.Stop(fmt.Errorf("accept connection fail, %s", err.Error()))
-					return
-				} else {
-					log.Logf("accepted new connection: %s", conn.tcpConn.RemoteAddr().String())
-				}
-			}
-		}
-	}()
+	m.Serve(listener, true)
 
 	return nil
 }
