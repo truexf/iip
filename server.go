@@ -206,6 +206,30 @@ func (m *Server) UnRegisterHandler(path string) {
 	m.handler.pathHandlerManager.unRegisterHandler(path)
 }
 
+func (m *Server) handleConnectionStatis(requestData []byte) (respData []byte, e error) {
+	conns := make(map[string]*Connection)
+	m.connLock.Lock()
+	for k, v := range m.connections {
+		conns[k] = v
+	}
+	defer m.connLock.Unlock()
+
+	var ret map[string]*ConnectionSatis
+	for k, v := range conns {
+		rec := &ConnectionSatis{WriteQueue: len(v.tcpWriteQueue), Count: v.Count}
+		v.ChannelsLock.RLock()
+		for cId, c := range v.Channels {
+			rec.Channels[cId] = struct {
+				ReceiveQueue int
+				Count        *Count
+			}{ReceiveQueue: len(c.receivedQueue), Count: c.Count}
+		}
+		v.ChannelsLock.RUnlock()
+		ret[k] = rec
+	}
+	return json.Marshal(&ret)
+}
+
 func (m *Server) handleStatis(requestData []byte) (respData []byte, e error) {
 	m.statisLock.RLock()
 	defer m.statisLock.RUnlock()
@@ -276,7 +300,8 @@ func (m *Server) Handle(path string, requestData []byte, dataCompleted bool) (re
 			return nil, nil
 		}
 		return m.handleStatis(requestData)
-
+	case PathServerConnectionStatis:
+		return m.handleConnectionStatis(requestData)
 	}
 	return nil, fmt.Errorf("path [%s] not support", path)
 }

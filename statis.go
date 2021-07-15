@@ -321,3 +321,12 @@ func (m *Count) Add(v Count) {
 	atomic.AddInt64(&m.BytesSent, v.BytesSent)
 	atomic.AddInt64(&m.BytesReceived, v.BytesReceived)
 }
+
+type ConnectionSatis struct {
+	Channels map[uint32]struct {
+		ReceiveQueue int
+		Count        *Count
+	}
+	WriteQueue int
+	Count      *Count
+}
