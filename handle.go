@@ -131,12 +131,14 @@ func (m *ClientPathHandlerManager) unRegisterHandler(path string) {
 	delete(m.HanderMap, path)
 }
 
-//packet handler接口
+// packet handler接口
 type Handler interface {
 	Handle(c *Channel, request *Packet, dataCompleted bool) ([]byte, error)
 }
 
 type ClientPathHandler interface {
+	// 一个response有可能由于size过大而被自动分割为多个packet传输，responseDataCompleted指示response是否已接收完整
+	// 为什么框架不等接收完整才调用handle呢，主要考虑在大数据量的传输场景中，不一定要接收完整才进行数据处理，可以边接收边处理
 	Handle(path string, request Request, responseData []byte, responseDataCompleted bool) error
 }
 
@@ -147,8 +149,9 @@ func (m *DefaultClientPathHandler) Handle(path string, request Request, response
 	return nil
 }
 
-// 普通响应，必须实现
 type ServerPathHandler interface {
+	// 一个request有可能由于size过大而被自动分割为多个packet传输，requestDataCompleted指示request是否已接收完整
+	// 为什么框架不等接收完整才调用handle呢，主要考虑在大数据量的传输场景中，不一定要接收完整才进行数据处理，可以边接收边处理
 	Handle(path string, requestData []byte, requestDataCompleted bool) (responseData []byte, e error)
 }
 
