@@ -15,4 +15,5 @@ var (
 	ErrRequestTimeout              error = &Error{Code: 103, Message: "request timtout"}
 	ErrUnknown                     error = &Error{Code: 104, Message: "unknown"}
 	ErrResponseHandlerNotImplement error = &Error{Code: 105, Message: "response handler not implement"}
+	ErrChannelCreateLimited        error = &Error{Code: 106, Message: "channel create limited"}
 )

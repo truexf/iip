@@ -9,7 +9,10 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,7 +38,7 @@ type Client struct {
 	config      ClientConfig
 	serverAddr  string
 	connections []*Connection
-	connLock    sync.Mutex
+	connLock    sync.RWMutex
 	handler     *clientHandler
 	Count       *Count
 	Measure     *Measure
@@ -100,6 +103,10 @@ func (m *Client) NewChannel() (*ClientChannel, error) {
 		return nil, err
 	}
 
+	return m.newChannel(conn)
+}
+
+func (m *Client) newChannel(conn *Connection) (*ClientChannel, error) {
 	c := &ClientChannel{
 		internalChannel:         conn.Channels[0],
 		client:                  m,
@@ -131,6 +138,36 @@ func (m *Client) NewChannel() (*ClientChannel, error) {
 	} else {
 		return nil, fmt.Errorf(resp.Message)
 	}
+}
+
+// 获取一个最不忙碌的channel:
+// 1. 找到发送队列最短的connection，如果其channel数<limit, 则在其上创建一个channel返回，否则:
+// 2. 如果connection数<limit, newConnection,并在其上创建一个channel返回，否则返回 nil, error
+func (m *Client) GetFreeChannel() (*ClientChannel, error) {
+	var freeConn *Connection
+	sendQueueLen := math.MaxInt32
+	m.connLock.RLock()
+	defer m.connLock.RUnlock()
+	for _, v := range m.connections {
+		if sendQueueLen > len(v.tcpWriteQueue) {
+			sendQueueLen = len(v.tcpWriteQueue)
+			freeConn = v
+		}
+	}
+
+	if freeConn == nil {
+		var err error
+		if freeConn, err = m.newConnection(); err != nil {
+			return nil, err
+		}
+	}
+	freeConn.ChannelsLock.RLock()
+	defer freeConn.ChannelsLock.RUnlock()
+	if len(freeConn.Channels) < m.config.MaxChannelsPerConn {
+		return m.newChannel(freeConn)
+	}
+
+	return nil, ErrChannelCreateLimited
 }
 
 func (m *Client) dialTLS() (net.Conn, error) {
@@ -332,4 +369,145 @@ func (m *ClientChannel) SetCtx(key string, value interface{}) {
 
 func (m *ClientChannel) GetCtx(key string) interface{} {
 	return m.internalChannel.GetCtxData(key)
+}
+
+type EvaluatedClient struct {
+	paused            bool
+	lastRequest       time.Time
+	client            *Client
+	requestErrorCount int
+	err               error
+}
+
+func (m *EvaluatedClient) DoRequest(path string, request Request, timeout time.Duration) ([]byte, error) {
+	channel, err := m.client.GetFreeChannel()
+	if err != nil {
+		m.err = err
+		m.paused = true
+		return nil, err
+	}
+	m.lastRequest = time.Now()
+	return channel.DoRequest(path, request, timeout)
+}
+
+// 由一组server提供无状态服务的场景下，LoadBalanceClient根据可配置的负载权重、keepalive检测，自动调节对不同server的请求频率
+// LoadBalanceClient内部管理多个client
+type LoadBalanceClient struct {
+	activeClients []*EvaluatedClient
+	idx           int
+	clientsLock   sync.RWMutex
+}
+
+type AddrWeightClient struct {
+	Addr   string
+	Weight int
+	client *Client
+}
+
+func (m *LoadBalanceClient) getFreeClient() (*EvaluatedClient, error) {
+	m.clientsLock.RLock()
+	defer m.clientsLock.RUnlock()
+	idx := m.idx - 1
+	if idx < 0 {
+		idx = len(m.activeClients) - 1
+	}
+	cnt := 0
+	for {
+		cnt++
+		idx++
+		if idx >= len(m.activeClients) {
+			idx = 0
+		}
+		if !m.activeClients[idx].paused {
+			return m.activeClients[idx], nil
+		} else {
+			if time.Since(m.activeClients[idx].lastRequest) > time.Second*15 {
+				return m.activeClients[idx], nil
+			}
+		}
+		if cnt >= len(m.activeClients) {
+			break
+		}
+	}
+	log.Error("no alived client")
+	return nil, fmt.Errorf("no alived client")
+}
+
+func (m *LoadBalanceClient) DoRequest(path string, request Request, timeout time.Duration) ([]byte, error) {
+	client, err := m.getFreeClient()
+	if err != nil {
+		return nil, err
+	}
+	ret, err := client.DoRequest(path, request, timeout)
+	if err != nil {
+		client.requestErrorCount++
+		if client.requestErrorCount > 3 {
+			client.paused = true
+		}
+	} else {
+		if client.requestErrorCount > 0 {
+			client.requestErrorCount--
+		}
+		if client.requestErrorCount == 0 {
+			client.paused = false
+		}
+	}
+	return ret, err
+}
+
+// 创建一个LoadBalanceClient
+// severList格式：ip:port#weight,ip:port#weight,ip:port#weight,...
+// 0<weight<100,表明server的权重
+func NewLoadBalanceClient(cfg ClientConfig, serverList string) (*LoadBalanceClient, error) {
+	svrs := strings.Split(serverList, ",")
+	var addrList []*AddrWeightClient
+	for _, v := range svrs {
+		s := strings.TrimSpace(v)
+		if s == "" {
+			continue
+		}
+		aw := strings.Split(s, "#")
+		if len(aw) != 2 {
+			continue
+		}
+		if aw[0] == "" {
+			continue
+		}
+		if weight, err := strconv.Atoi(aw[1]); err != nil {
+			continue
+		} else {
+			addrList = append(addrList, &AddrWeightClient{Addr: aw[0], Weight: weight})
+		}
+	}
+	if len(addrList) == 0 {
+		return nil, fmt.Errorf("invalid param: serverList")
+	}
+
+	var addrListFinal []*AddrWeightClient
+	for _, v := range addrList {
+		if client, err := NewClient(cfg, v.Addr, nil); err == nil {
+			v.client = client
+			addrListFinal = append(addrListFinal, v)
+		}
+	}
+
+	ret := &LoadBalanceClient{}
+	exists := false
+	for {
+		for _, v := range addrListFinal {
+			if v.Weight > 0 {
+				v.Weight--
+				ret.activeClients = append(ret.activeClients, &EvaluatedClient{client: v.client})
+				if v.Weight > 0 {
+					exists = true
+				}
+			}
+		}
+		if !exists {
+			break
+		} else {
+			exists = false
+		}
+	}
+	return ret, nil
 }
