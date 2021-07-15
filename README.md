@@ -1,3 +1,4 @@
+[![GoDoc](https://godoc.org/github.com/truexf/iip?status.svg)](http://godoc.org/github.com/truexf/iip) 
 ## 使用说明
 * echo回显client示例: [example/echo_client/echo_client.go](https://github.com/truexf/iip/blob/master/example/echo_client/echo_client.go)
 * echo回显server示例: [example/echo_server/echo_server.go](https://github.com/truexf/iip/blob/master/example/echo_server/echo_server.go)

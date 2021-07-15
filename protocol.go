@@ -45,24 +45,7 @@ type Packet struct {
 	channel   *Channel
 }
 
-/*
-帧格式：
-* 1字节数据帧状态标识：
-	0表示请求首帧，请求未完成
-	1表示请求首帧，请求完成
-	2表示请求后续帧，请求未完成
-	3表示请求后续帧，请求完成;
-	4表示响应首帧，响应未完成
-	5表示响应首帧，响应完成
-	6表示响应后续帧，响应未完成
-	7表示响应后续帧，响应完成
-	8关闭连接
-* 文本路径（只存在于请求首帧。与unix路径格式相同，类似于url的path，用于指明请求的路径,限制不能大于1024字节）
-* \0
-* 4字节channel识符（多路复用的流身份ID，无符号整数，请求方自增实现）
-* 4字节数据长度（限制一个帧的数据长度不能大于16MB）
-* 数据
-*/
+// 根据一个Packet对象创建一个用于tcp发送的网络数据包
 func CreateNetPacket(pkt *Packet) ([]byte, error) {
 	if len(pkt.Path) > int(MaxPathLen) {
 		return nil, fmt.Errorf("path is too large, must be <= %d bytes", MaxPathLen)
@@ -87,6 +70,7 @@ func CreateNetPacket(pkt *Packet) ([]byte, error) {
 	return pktData, nil
 }
 
+// 从网络数据中读取生成Packet对象
 func ReadPacket(reader io.Reader) (*Packet, error) {
 	bufReader := bufio.NewReaderSize(reader, int(PacketReadBufSize))
 	btsChannelId := make([]byte, 4)
@@ -124,6 +108,7 @@ func ReadPacket(reader io.Reader) (*Packet, error) {
 	return pkt, nil
 }
 
+// 向网络发送Packet
 func WritePacket(pkt *Packet, writer io.Writer) (int, error) {
 	data, err := CreateNetPacket(pkt)
 	if err != nil {
@@ -150,6 +135,7 @@ func WritePacket(pkt *Packet, writer io.Writer) (int, error) {
 	return n, nil
 }
 
+// 检查来自client端的Packet的Status是否合法
 func CheckClientPacketStatus(prev, current byte) error {
 	switch current {
 	case StatusC0, StatusC1:
@@ -168,6 +154,7 @@ func CheckClientPacketStatus(prev, current byte) error {
 	return nil
 }
 
+// 检查来自server端的Packet的Status是否合法
 func CheckServerPacketStatus(prev, current byte) error {
 	switch current {
 	case StatusS4, StatusS5:
@@ -186,7 +173,8 @@ func CheckServerPacketStatus(prev, current byte) error {
 	return nil
 }
 
-//channel的实现
+// channel的实现
+// chuannel由框架内部使用
 type Channel struct {
 	DefaultErrorHolder
 	DefaultContext
@@ -441,6 +429,7 @@ func (m *Channel) handleClientLoop() {
 	}
 }
 
+//关闭channel
 func (m *Channel) Close(err error) {
 	if !atomic.CompareAndSwapUint32(&m.closeLock, 0, 1) {
 		return
@@ -479,6 +468,7 @@ type Connection struct {
 	Count         *Count
 }
 
+// 创建一个Connection对象，由Client或Server内部调用
 func NewConnection(client *Client, server *Server, netConn net.Conn, role byte, writeQueueLen int) (*Connection, error) {
 	if role != RoleClient && role != RoleServer {
 		return nil, fmt.Errorf("invalid role value")
