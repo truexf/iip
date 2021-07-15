@@ -72,8 +72,8 @@ func main() {
 		MaxChannelsPerConn:    10,
 		ChannelPacketQueueLen: 1000,
 		TcpWriteQueueLen:      1000,
-		TcpReadBufferSize:     16 * 1024 * 1024,
-		TcpWriteBufferSize:    16 * 1024 * 1024,
+		TcpReadBufferSize:     16 * 1024,
+		TcpWriteBufferSize:    16 * 1024,
 	}, ListenAddr, nil)
 
 	if err != nil {

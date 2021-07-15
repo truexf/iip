@@ -65,8 +65,8 @@ func NewFileDownloadClient(serverAddr string) (*FileDownloadClient, error) {
 			MaxChannelsPerConn:    10,
 			ChannelPacketQueueLen: 1000,
 			TcpWriteQueueLen:      1000,
-			TcpReadBufferSize:     16 * 1024 * 1024,
-			TcpWriteBufferSize:    16 * 1024 * 1024,
+			TcpReadBufferSize:     16 * 1024,
+			TcpWriteBufferSize:    16 * 1024,
 			TcpConnectTimeout:     time.Second * 3,
 		},
 		serverAddr,
@@ -76,7 +76,7 @@ func NewFileDownloadClient(serverAddr string) (*FileDownloadClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	client.RegisterHandler("/download_file", ret)
+	client.RegisterHandler(PathDownloadFile, ret)
 	channel, err := client.NewChannel()
 	if err != nil {
 		return nil, err
