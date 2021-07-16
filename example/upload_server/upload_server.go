@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"net/url"
 	"os"
 
 	"github.com/truexf/iip"
@@ -35,7 +36,7 @@ type FileUploadResponse struct {
 type FileServer struct {
 }
 
-func (m *FileServer) Handle(path string, requestData []byte, requestDataCompleted bool) ([]byte, error) {
+func (m *FileServer) Handle(path string, queryParams url.Values, requestData []byte, requestDataCompleted bool) ([]byte, error) {
 	fmt.Printf("request %d bytes\n", len(requestData))
 	if len(requestData) <= 4 {
 		return nil, fmt.Errorf("invalid request: %s", string(requestData))

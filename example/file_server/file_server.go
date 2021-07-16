@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 
 	"github.com/truexf/iip"
@@ -28,7 +29,7 @@ type FileDownloadRequest struct {
 type FileServer struct {
 }
 
-func (m *FileServer) Handle(path string, requestData []byte, requestDataCompleted bool) ([]byte, error) {
+func (m *FileServer) Handle(path string, queryParams url.Values, requestData []byte, requestDataCompleted bool) ([]byte, error) {
 	fmt.Printf("request: %s\n", string(requestData))
 	if !requestDataCompleted {
 		return nil, nil

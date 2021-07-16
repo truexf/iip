@@ -12,6 +12,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,13 +37,36 @@ func isServerStatusUncompleted(status byte) bool {
 }
 
 type Packet struct {
-	Type      byte   `json:"type"` //0 request, 4 response
-	Status    byte   `json:"status"`
-	Path      string `json:"path"`
-	ChannelId uint32 `json:"channel_id"`
-	Data      []byte `json:"data"`
-	DontChunk bool   //禁止分成多个packet传输
-	channel   *Channel
+	Type          byte   `json:"type"` //0 request, 4 response
+	Status        byte   `json:"status"`
+	Path          string `json:"path"`
+	ChannelId     uint32 `json:"channel_id"`
+	Data          []byte `json:"data"`
+	DontChunk     bool   //禁止分成多个packet传输
+	channel       *Channel
+	params        url.Values
+	parsePathLock sync.Mutex
+}
+
+func (m *Packet) parsePath() {
+	m.parsePathLock.Lock()
+	defer m.parsePathLock.Unlock()
+	if m.params != nil {
+		return
+	}
+	if u, err := url.Parse(m.Path); err != nil {
+		m.params = make(url.Values)
+	} else {
+		m.params = u.Query()
+		m.Path = u.Path
+	}
+}
+
+func (m *Packet) PathParam(key string) string {
+	if m.params == nil {
+		m.parsePath()
+	}
+	return m.params.Get(key)
 }
 
 // 根据一个Packet对象创建一个用于tcp发送的网络数据包
@@ -53,7 +77,7 @@ func CreateNetPacket(pkt *Packet) ([]byte, error) {
 	if len(pkt.Data) > int(MaxPacketSize) {
 		return nil, fmt.Errorf("data is too large, must be <= %d bytes", MaxPacketSize)
 	}
-	if pkt.Status != Status8 && !ValidatePath(pkt.Path) {
+	if pkt.Status != Status8 && pkt.Path == "" {
 		return nil, fmt.Errorf("invalid path: %s", pkt.Path)
 	}
 	pktLen := 1 + len(pkt.Path) + 4 + 4 + len(pkt.Data)

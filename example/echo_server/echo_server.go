@@ -7,6 +7,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/url"
 
 	"github.com/truexf/iip"
 )
@@ -14,7 +15,7 @@ import (
 type EchoServerHandler struct {
 }
 
-func (m *EchoServerHandler) Handle(path string, requestData []byte, dataCompleted bool) ([]byte, error) {
+func (m *EchoServerHandler) Handle(path string, queryParams url.Values, requestData []byte, dataCompleted bool) ([]byte, error) {
 	if path == "/echo" {
 		if dataCompleted {
 			fmt.Printf("%s received: %s\n", path, string(requestData))

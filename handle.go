@@ -8,6 +8,7 @@ package iip
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"runtime"
 	"sync"
@@ -155,7 +156,7 @@ func (m *DefaultClientPathHandler) Handle(path string, request Request, response
 type ServerPathHandler interface {
 	// 一个request有可能由于size过大而被自动分割为多个packet传输，requestDataCompleted指示request是否已接收完整
 	// 为什么框架不等接收完整才调用handle呢，主要考虑在大数据量的传输场景中，不一定要接收完整才进行数据处理，可以边接收边处理
-	Handle(path string, requestData []byte, requestDataCompleted bool) (responseData []byte, e error)
+	Handle(path string, queryParams url.Values, requestData []byte, requestDataCompleted bool) (responseData []byte, e error)
 }
 
 type serverHandler struct {
@@ -167,6 +168,7 @@ func (m *serverHandler) Handle(c *Channel, request *Packet, dataCompleted bool) 
 	if request == nil || request.Path == "" || request.channel == nil || request.channel.conn == nil {
 		return nil, fmt.Errorf("invalid request")
 	}
+	request.parsePath()
 	switch request.Path {
 	case PathNewChannel:
 		c := request.channel.conn.newChannel(false, 100, nil, nil)
@@ -195,7 +197,7 @@ func (m *serverHandler) Handle(c *Channel, request *Packet, dataCompleted bool) 
 					os.Stderr.Sync()
 				}
 			}()
-			return pathHandler.Handle(request.Path, request.Data, dataCompleted)
+			return pathHandler.Handle(request.Path, request.params, request.Data, dataCompleted)
 		}()
 		if err != nil {
 			bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "handler fail:" + err.Error()})

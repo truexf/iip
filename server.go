@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/url"
 	"sync"
 	"time"
 )
@@ -282,7 +283,7 @@ func (m *Server) GetStatis(timeUnitJson []byte) (respData []byte, e error) {
 	return []byte(ret), nil
 }
 
-func (m *Server) Handle(path string, requestData []byte, dataCompleted bool) (respData []byte, e error) {
+func (m *Server) Handle(path string, queryParams url.Values, requestData []byte, dataCompleted bool) (respData []byte, e error) {
 	switch path {
 	case PathServerCountJson:
 		return json.Marshal(m.count)
@@ -312,7 +313,7 @@ func (m *Server) Handle(path string, requestData []byte, dataCompleted bool) (re
 		}
 		return m.GetStatis(requestData)
 	case PathServerConnectionStatis:
-		return m.GetConnectionStatis(requestData)
+		return m.GetConnectionStatis()
 	}
 	return nil, fmt.Errorf("path [%s] not support", path)
 }

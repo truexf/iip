@@ -6,9 +6,9 @@ package iip
 
 //系统常量定义
 const (
-	MaxPathLen        uint32 = 512              //packet的path字段最大字节数
+	MaxPathLen        uint32 = 2048             //packet的path字段最大字节数
 	MaxPacketSize     uint32 = 16 * 1024 * 1024 //packet最大字节数
-	PacketReadBufSize uint32 = 16 * 1024        //从他tcp fd读取数据用于缓存解析的缓冲区的大小
+	PacketReadBufSize uint32 = 32 * 1024        //从他tcp fd读取数据用于缓存解析的缓冲区的大小
 
 	//系统路径
 	PathNewChannel             string = "/sys/new_channel"

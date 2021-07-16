@@ -6,6 +6,7 @@
 package iip
 
 import (
+	"net/url"
 	"sync"
 	"time"
 )
@@ -119,11 +120,8 @@ func ValidatePath(path string) bool {
 	if path == "" {
 		return false
 	}
-	for i := 0; i < len(path); i++ {
-		if (path[i] >= 'A' && path[i] <= 'z') || (path[i] >= '0' && path[i] <= '9') || path[i] == '_' || path[i] == '-' || path[i] == '/' {
-		} else {
-			return false
-		}
+	if _, err := url.Parse(path); err != nil {
+		return false
 	}
 	return true
 }
