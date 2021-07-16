@@ -102,8 +102,13 @@ type Response struct {
 	Data    []byte
 }
 
+// 构建一个iip请求，请求数据从data传入，如果传入nil,则函数自动填入"{}", iip协议不允许请求数据空白
 func NewDefaultRequest(data []byte) Request {
-	return &DefaultRequest{data: data}
+	ret := &DefaultRequest{data: data}
+	if len(ret.data) == 0 {
+		ret.data = []byte("{}")
+	}
+	return ret
 }
 
 func (m *DefaultRequest) Data() []byte {
