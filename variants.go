@@ -16,4 +16,5 @@ var (
 	ErrUnknown                     error = &Error{Code: 104, Message: "unknown"}
 	ErrResponseHandlerNotImplement error = &Error{Code: 105, Message: "response handler not implement"}
 	ErrChannelCreateLimited        error = &Error{Code: 106, Message: "channel create limited"}
+	ErrServerConnectionsLimited    error = &Error{Code: 107, Message: "server connections limited"}
 )
