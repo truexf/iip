@@ -31,8 +31,8 @@ func BenchmarkEchoClientServer(t *testing.B) {
 					MaxChannelsPerConn:    10,
 					ChannelPacketQueueLen: 1000,
 					TcpWriteQueueLen:      1000,
-					TcpReadBufferSize:     16 * 1024 * 1024,
-					TcpWriteBufferSize:    16 * 1024 * 1024,
+					TcpReadBufferSize:     16 * 1024,
+					TcpWriteBufferSize:    16 * 1024,
 					TcpConnectTimeout:     time.Second * 3,
 				}, ":9090", nil)
 				if err != nil {

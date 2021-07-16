@@ -100,8 +100,8 @@ func LoadBalanceClientDemo() {
 		MaxChannelsPerConn:    10,
 		ChannelPacketQueueLen: 1000,
 		TcpWriteQueueLen:      1000,
-		TcpReadBufferSize:     16 * 1024 * 1024,
-		TcpWriteBufferSize:    16 * 1024 * 1024,
+		TcpReadBufferSize:     16 * 1024,
+		TcpWriteBufferSize:    16 * 1024,
 		TcpConnectTimeout:     time.Second * 3,
 	}, ":9090#1,:9090#2,:9090#3")
 	if err != nil {
