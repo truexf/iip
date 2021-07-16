@@ -212,7 +212,7 @@ func (m *Server) UnRegisterHandler(path string) {
 	m.handler.pathHandlerManager.unRegisterHandler(path)
 }
 
-func (m *Server) handleConnectionStatis(requestData []byte) (respData []byte, e error) {
+func (m *Server) GetConnectionStatis(requestData []byte) (respData []byte, e error) {
 	conns := make(map[string]*Connection)
 	m.connLock.Lock()
 	for k, v := range m.connections {
@@ -239,7 +239,7 @@ func (m *Server) handleConnectionStatis(requestData []byte) (respData []byte, e 
 	return json.Marshal(&ret)
 }
 
-func (m *Server) handleStatis(requestData []byte) (respData []byte, e error) {
+func (m *Server) GetStatis(requestData []byte) (respData []byte, e error) {
 	m.statisLock.RLock()
 	defer m.statisLock.RUnlock()
 	pathList := make([]string, 0, len(m.pathCount))
@@ -308,9 +308,9 @@ func (m *Server) Handle(path string, requestData []byte, dataCompleted bool) (re
 		if !dataCompleted {
 			return nil, nil
 		}
-		return m.handleStatis(requestData)
+		return m.GetStatis(requestData)
 	case PathServerConnectionStatis:
-		return m.handleConnectionStatis(requestData)
+		return m.GetConnectionStatis(requestData)
 	}
 	return nil, fmt.Errorf("path [%s] not support", path)
 }
