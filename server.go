@@ -212,7 +212,7 @@ func (m *Server) UnRegisterHandler(path string) {
 	m.handler.pathHandlerManager.unRegisterHandler(path)
 }
 
-func (m *Server) GetConnectionStatis(requestData []byte) (respData []byte, e error) {
+func (m *Server) GetConnectionStatis() (respData []byte, e error) {
 	conns := make(map[string]*Connection)
 	m.connLock.Lock()
 	for k, v := range m.connections {
@@ -239,7 +239,9 @@ func (m *Server) GetConnectionStatis(requestData []byte) (respData []byte, e err
 	return json.Marshal(&ret)
 }
 
-func (m *Server) GetStatis(requestData []byte) (respData []byte, e error) {
+// requestData format:
+// {"time_unit": "microsecond|millisecond|second|nanosecond"}
+func (m *Server) GetStatis(timeUnitJson []byte) (respData []byte, e error) {
 	m.statisLock.RLock()
 	defer m.statisLock.RUnlock()
 	pathList := make([]string, 0, len(m.pathCount))
@@ -250,7 +252,7 @@ func (m *Server) GetStatis(requestData []byte) (respData []byte, e error) {
 	// 性能统计信息中请求处理耗时的时间单位，默认以微秒计
 	tmUnit := time.Microsecond
 	reqMap := make(map[string]interface{})
-	if err := json.Unmarshal(requestData, &reqMap); err == nil {
+	if err := json.Unmarshal(timeUnitJson, &reqMap); err == nil {
 		if ut, ok := reqMap["time_unit"]; ok {
 			if utStr, ok := ut.(string); ok {
 				if utStr == "microsecond" {
