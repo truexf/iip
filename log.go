@@ -122,6 +122,9 @@ func (m *DefaultLogger) Errorf(format string, args ...interface{}) {
 
 var log Logger = &DefaultLogger{}
 
+func GetLogger() Logger {
+	return log
+}
 func SetLogger(logger Logger) {
 	log = logger
 }
