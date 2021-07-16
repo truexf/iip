@@ -58,4 +58,9 @@ func TestServerCount(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	fmt.Println(string(bts))
+	bts, err = channel.DoRequest(PathServerConnectionStatis, NewDefaultRequest(echoData), time.Second)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	fmt.Println(string(bts))
 }

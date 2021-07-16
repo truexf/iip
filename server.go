@@ -63,6 +63,7 @@ func NewServer(config ServerConfig, listenAddr string, timeCountRangeFunc Ensure
 	ret.RegisterHandler(PathServerPathCountJson, ret, EnsureTimeRangeMicroSecond)
 	ret.RegisterHandler(PathServerPathMeasureJson, ret, EnsureTimeRangeMicroSecond)
 	ret.RegisterHandler(PathServerStatis, ret, EnsureTimeRangeMicroSecond)
+	ret.RegisterHandler(PathServerConnectionStatis, ret, EnsureTimeRangeMicroSecond)
 
 	return ret, nil
 }
@@ -214,9 +215,12 @@ func (m *Server) handleConnectionStatis(requestData []byte) (respData []byte, e 
 	}
 	defer m.connLock.Unlock()
 
-	var ret map[string]*ConnectionSatis
+	ret := make(map[string]*ConnectionSatis)
 	for k, v := range conns {
-		rec := &ConnectionSatis{WriteQueue: len(v.tcpWriteQueue), Count: v.Count}
+		rec := &ConnectionSatis{WriteQueue: len(v.tcpWriteQueue), Count: v.Count, Channels: make(map[uint32]struct {
+			ReceiveQueue int
+			Count        *Count
+		})}
 		v.ChannelsLock.RLock()
 		for cId, c := range v.Channels {
 			rec.Channels[cId] = struct {
