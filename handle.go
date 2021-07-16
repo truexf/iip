@@ -8,7 +8,10 @@ package iip
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"runtime"
 	"sync"
+	"time"
 )
 
 type ResponseNewChannel struct {
@@ -178,7 +181,22 @@ func (m *serverHandler) Handle(c *Channel, request *Packet, dataCompleted bool) 
 		if pathHandler == nil {
 			return nil, ErrResponseHandlerNotImplement
 		}
-		ret, err := pathHandler.Handle(request.Path, request.Data, dataCompleted)
+		ret, err := func() ([]byte, error) {
+			defer func() {
+				if err := recover(); err != nil {
+					log.Errorf("%s, handling %s, unexcepted error: %v", time.Now().String(), request.Path, err)
+					buf := make([]byte, 8192)
+					n := runtime.Stack(buf, true)
+					if n > 0 {
+						log.Error(string(buf[:n]))
+					} else {
+						log.Error("no stack trace")
+					}
+					os.Stderr.Sync()
+				}
+			}()
+			return pathHandler.Handle(request.Path, request.Data, dataCompleted)
+		}()
 		if err != nil {
 			bts, _ := json.Marshal(&ResponseHandleFail{Code: -1, Message: "handler fail:" + err.Error()})
 			return bts, nil
@@ -208,7 +226,22 @@ func (m *clientHandler) Handle(c *Channel, response *Packet, dataCompleted bool)
 			pathHandler = &DefaultClientPathHandler{}
 		}
 
-		err := pathHandler.Handle(response.Path, c.GetCtxData(CtxRequest).(Request), response.Data, dataCompleted)
+		err := func() error {
+			defer func() {
+				if err := recover(); err != nil {
+					log.Errorf("%s, handling %s, unexcepted error: %v", time.Now().String(), response.Path, err)
+					buf := make([]byte, 8192)
+					n := runtime.Stack(buf, true)
+					if n > 0 {
+						log.Error(string(buf[:n]))
+					} else {
+						log.Error("no stack trace")
+					}
+					os.Stderr.Sync()
+				}
+			}()
+			return pathHandler.Handle(response.Path, c.GetCtxData(CtxRequest).(Request), response.Data, dataCompleted)
+		}()
 		if err != nil {
 			return nil, err
 		} else {
