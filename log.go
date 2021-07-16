@@ -10,25 +10,75 @@ import (
 	"os"
 )
 
+type LogLevel int
+
+const (
+	LogLevelError LogLevel = iota
+	LoglevelWarn
+	LogLevelLog
+	LogLevelDebug
+)
+
 type Logger interface {
-	Log(s string)
-	Logf(format string, args ...interface{})
-	Warn(s string)
-	Warnf(format string, args ...interface{})
+	GetLevel() LogLevel
+	SetLevel(v LogLevel)
 	Error(s string)
 	Errorf(format string, args ...interface{})
+	Warn(s string)
+	Warnf(format string, args ...interface{})
+	Log(s string)
+	Logf(format string, args ...interface{})
+	Debug(s string)
+	Debugf(format string, args ...interface{})
 }
 
 type DefaultLogger struct {
+	level LogLevel
+}
+
+func (m *DefaultLogger) GetLevel() LogLevel {
+	return m.level
+}
+
+func (m *DefaultLogger) SetLevel(v LogLevel) {
+	m.level = v
+}
+
+func (m *DefaultLogger) Debug(s string) {
+	if m.level < LogLevelLog {
+		return
+	}
+	fmt.Print(s)
+	if len(s) == 0 || s[len(s)-1] != '\n' {
+		fmt.Println("")
+	}
+}
+
+func (m *DefaultLogger) Debugf(format string, args ...interface{}) {
+	if m.level < LogLevelLog {
+		return
+	}
+	s := fmt.Sprintf(format, args...)
+	if len(s) == 0 || s[len(s)-1] != '\n' {
+		s += "\n"
+	}
+	fmt.Print(s)
+
 }
 
 func (m *DefaultLogger) Log(s string) {
+	if m.level < LogLevelLog {
+		return
+	}
 	fmt.Print(s)
 	if len(s) == 0 || s[len(s)-1] != '\n' {
 		fmt.Println("")
 	}
 }
 func (m *DefaultLogger) Logf(format string, args ...interface{}) {
+	if m.level < LogLevelLog {
+		return
+	}
 	s := fmt.Sprintf(format, args...)
 	if len(s) == 0 || s[len(s)-1] != '\n' {
 		s += "\n"
@@ -37,13 +87,23 @@ func (m *DefaultLogger) Logf(format string, args ...interface{}) {
 
 }
 func (m *DefaultLogger) Warn(s string) {
-	fmt.Print(s)
-	if len(s) == 0 || s[len(s)-1] != '\n' {
-		fmt.Println("")
+	if m.level < LoglevelWarn {
+		return
 	}
+	if len(s) == 0 || s[len(s)-1] != '\n' {
+		s += "\n"
+	}
+	os.Stderr.WriteString(s)
 }
 func (m *DefaultLogger) Warnf(format string, args ...interface{}) {
-	m.Logf(format, args...)
+	if m.level < LoglevelWarn {
+		return
+	}
+	s := fmt.Sprintf(format, args...)
+	if len(s) == 0 || s[len(s)-1] != '\n' {
+		s += "\n"
+	}
+	os.Stderr.WriteString(s)
 }
 func (m *DefaultLogger) Error(s string) {
 	os.Stderr.WriteString(s)
