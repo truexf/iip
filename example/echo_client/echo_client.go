@@ -92,3 +92,40 @@ func main() {
 	}
 
 }
+
+func LoadBalanceClientDemo() {
+	iip.GetLogger().SetLevel(iip.LogLevelDebug)
+	lbc, err := iip.NewLoadBalanceClient(iip.ClientConfig{
+		MaxConnections:        2,
+		MaxChannelsPerConn:    10,
+		ChannelPacketQueueLen: 1000,
+		TcpWriteQueueLen:      1000,
+		TcpReadBufferSize:     16 * 1024 * 1024,
+		TcpWriteBufferSize:    16 * 1024 * 1024,
+		TcpConnectTimeout:     time.Second * 3,
+	}, ":9090#1,:9090#2,:9090#3")
+	if err != nil {
+		fmt.Errorf("new lbc fail,%s", err.Error())
+		return
+	}
+	fmt.Println("new lbc ok")
+	var btsPrev []byte
+	defer os.Stdout.WriteString(lbc.Status())
+	for i := 0; i < 50; i++ {
+		bts, err := lbc.DoRequest(iip.PathServerConnectionStatis, iip.NewDefaultRequest(nil), time.Second)
+		if err != nil {
+			os.Stdout.WriteString(fmt.Sprintf("err: %s\n", err.Error()))
+		} else {
+			btsPrev = bts
+			os.Stdout.WriteString(fmt.Sprintf("%d, %d\n", i, len(bts)))
+			if i == 49 {
+				os.Stdout.WriteString(string(bts))
+			}
+		}
+	}
+	os.Stdout.WriteString(string(btsPrev))
+	os.Stdout.Sync()
+	time.Sleep(time.Second)
+
+	return
+}
