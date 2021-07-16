@@ -69,6 +69,7 @@ func NewClient(config ClientConfig, serverAddr string, timeCountRangeFunc Ensure
 		Count:       &Count{},
 		Measure:     NewMesure(timeCountRangeFunc),
 	}
+	ret.config.MaxChannelsPerConn += 1 //channel 0 is internal required
 	return ret, nil
 }
 
@@ -147,27 +148,28 @@ func (m *Client) GetFreeChannel() (*ClientChannel, error) {
 	var freeConn *Connection
 	sendQueueLen := math.MaxInt32
 	m.connLock.RLock()
-	defer m.connLock.RUnlock()
 	for _, v := range m.connections {
 		if sendQueueLen > len(v.tcpWriteQueue) {
 			sendQueueLen = len(v.tcpWriteQueue)
 			freeConn = v
 		}
 	}
+	m.connLock.RUnlock()
 
-	if freeConn == nil {
+	chLen := 0
+	if freeConn != nil {
+		freeConn.ChannelsLock.RLock()
+		chLen = len(freeConn.Channels)
+		freeConn.ChannelsLock.RUnlock()
+	}
+	if freeConn == nil || chLen >= m.config.MaxChannelsPerConn {
 		var err error
 		if freeConn, err = m.newConnection(); err != nil {
 			return nil, err
 		}
 	}
-	freeConn.ChannelsLock.RLock()
-	defer freeConn.ChannelsLock.RUnlock()
-	if len(freeConn.Channels) < m.config.MaxChannelsPerConn {
-		return m.newChannel(freeConn)
-	}
 
-	return nil, ErrChannelCreateLimited
+	return m.newChannel(freeConn)
 }
 
 func (m *Client) dialTLS() (net.Conn, error) {
@@ -185,6 +187,13 @@ func (m *Client) dialTLS() (net.Conn, error) {
 }
 
 func (m *Client) newConnection() (*Connection, error) {
+	m.connLock.RLock()
+	connLen := len(m.connections)
+	m.connLock.RUnlock()
+	if connLen >= m.config.MaxConnections {
+		return nil, ErrClientConnectionsLimited
+	}
+
 	var conn net.Conn
 	var err error
 	if !m.isTls {
@@ -433,6 +442,16 @@ func (m *LoadBalanceClient) getFreeClient() (*EvaluatedClient, error) {
 	return nil, fmt.Errorf("no alived client")
 }
 
+func (m *LoadBalanceClient) Status() string {
+	m.clientsLock.RLock()
+	defer m.clientsLock.RLock()
+	ret := ""
+	for _, v := range m.activeClients {
+		ret += fmt.Sprintf("%s\n", v.client.serverAddr)
+	}
+	return ret
+}
+
 func (m *LoadBalanceClient) DoRequest(path string, request Request, timeout time.Duration) ([]byte, error) {
 	client, err := m.getFreeClient()
 	if err != nil {
@@ -476,6 +495,9 @@ func NewLoadBalanceClient(cfg ClientConfig, serverList string) (*LoadBalanceClie
 		if weight, err := strconv.Atoi(aw[1]); err != nil {
 			continue
 		} else {
+			if weight < 1 || weight > 100 {
+				continue
+			}
 			addrList = append(addrList, &AddrWeightClient{Addr: aw[0], Weight: weight})
 		}
 	}
@@ -508,6 +530,9 @@ func NewLoadBalanceClient(cfg ClientConfig, serverList string) (*LoadBalanceClie
 		} else {
 			exists = false
 		}
+	}
+	if log.GetLevel() == LogLevelDebug {
+		log.Debug(ret.Status())
 	}
 	return ret, nil
 }
