@@ -23,7 +23,7 @@ func TestLoadBalanceClient(t *testing.T) {
 		TcpConnectTimeout:     time.Second * 3,
 	}, ":9090#1,:9090#2,:9090#3")
 	if err != nil {
-		fmt.Errorf("new lbc fail,%s", err.Error())
+		fmt.Printf("new lbc fail,%s", err.Error())
 		return
 	}
 	fmt.Println("new lbc ok")

@@ -105,7 +105,7 @@ func LoadBalanceClientDemo() {
 		TcpConnectTimeout:     time.Second * 3,
 	}, ":9090#1,:9090#2,:9090#3")
 	if err != nil {
-		fmt.Errorf("new lbc fail,%s", err.Error())
+		fmt.Printf("new lbc fail,%s", err.Error())
 		return
 	}
 	fmt.Println("new lbc ok")
@@ -126,6 +126,4 @@ func LoadBalanceClientDemo() {
 	os.Stdout.WriteString(string(btsPrev))
 	os.Stdout.Sync()
 	time.Sleep(time.Second)
-
-	return
 }
