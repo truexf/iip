@@ -12,7 +12,7 @@ var (
 	ErrPacketContinue              error = &Error{Code: 100, Message: "packet uncompleted"}
 	ErrHandleNoResponse            error = &Error{Code: 101, Message: "handle no response"}
 	ErrHandleError                 error = &Error{Code: 102, Message: "handle error"}
-	ErrRequestTimeout              error = &Error{Code: 103, Message: "request timtout"}
+	ErrRequestTimeout              error = &Error{Code: 103, Message: "request timeout"}
 	ErrUnknown                     error = &Error{Code: 104, Message: "unknown"}
 	ErrResponseHandlerNotImplement error = &Error{Code: 105, Message: "response handler not implement"}
 	ErrChannelCreateLimited        error = &Error{Code: 106, Message: "channel create limited"}
