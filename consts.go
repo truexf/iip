@@ -45,4 +45,5 @@ const (
 	CtxResponseChan           string = "/ctx/sys/response_chan"
 	CtxUncompletedRequestChan string = "/ctx/sys/uncreq_chan" //见Client.uncompletedRequestQueue
 	CtxRequest                string = "/ctx/sys/request"     //在client handle函数里,可以通过channel.GetCtxData(CtxRequest)获得当前响应对应的请求
+	CtxClientChannel          string = "/ctx/sys/client_chan" //
 )
