@@ -175,7 +175,6 @@ func (m *Client) GetFreeChannel() (*ClientChannel, error) {
 
 	if freeConn != nil {
 		freeConn.ChannelsLock.RLock()
-		defer freeConn.ChannelsLock.RUnlock()
 		var ch *Channel
 		minQueue := int(m.config.ChannelPacketQueueLen)
 		for k, v := range freeConn.Channels {
@@ -188,15 +187,17 @@ func (m *Client) GetFreeChannel() (*ClientChannel, error) {
 				ch = v
 			}
 		}
+		chLen := len(freeConn.Channels)
+		freeConn.ChannelsLock.RUnlock()
 
 		if ch != nil {
 			ret := ch.GetCtxData(CtxClientChannel).(*ClientChannel)
 			return ret, nil
-		} else if len(freeConn.Channels) < m.config.MaxChannelsPerConn {
+		} else if chLen < m.config.MaxChannelsPerConn {
 			return m.newChannel(freeConn)
 		}
 	}
-	
+
 	return nil, ErrClientConnectionsLimited
 }
 
