@@ -56,7 +56,7 @@ func (m *DefaultContext) GetCtxData(key string) interface{} {
 	m.ctxLock.RLock()
 	defer m.ctxLock.RUnlock()
 	if m.ctx == nil {
-		m.ctx = make(map[string]interface{})
+		return nil
 	}
 	if ret, ok := m.ctx[key]; ok {
 		return ret
@@ -83,7 +83,7 @@ func (m *DefaultContext) RemoveCtxData(key string) {
 	m.ctxLock.Lock()
 	defer m.ctxLock.Unlock()
 	if m.ctx == nil {
-		m.ctx = make(map[string]interface{})
+		return
 	}
 	delete(m.ctx, key)
 }

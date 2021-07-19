@@ -219,7 +219,7 @@ func (m *Server) GetConnectionStatis() (respData []byte, e error) {
 	for k, v := range m.connections {
 		conns[k] = v
 	}
-	defer m.connLock.Unlock()
+	m.connLock.Unlock()
 
 	ret := make(map[string]*ConnectionSatis)
 	for k, v := range conns {
