@@ -416,17 +416,15 @@ type AddrWeightClient struct {
 func (m *LoadBalanceClient) getFreeClient() (*EvaluatedClient, error) {
 	m.clientsLock.RLock()
 	defer m.clientsLock.RUnlock()
-	idx := m.idx - 1
-	if idx < 0 {
-		idx = len(m.activeClients) - 1
-	}
-	cnt := 0
+	idx := m.idx
+	iterCnt := 0
 	for {
-		cnt++
+		iterCnt++
 		idx++
 		if idx >= len(m.activeClients) {
 			idx = 0
 		}
+		m.idx = idx
 		if !m.activeClients[idx].paused {
 			return m.activeClients[idx], nil
 		} else {
@@ -434,7 +432,7 @@ func (m *LoadBalanceClient) getFreeClient() (*EvaluatedClient, error) {
 				return m.activeClients[idx], nil
 			}
 		}
-		if cnt >= len(m.activeClients) {
+		if iterCnt >= len(m.activeClients) {
 			break
 		}
 	}
