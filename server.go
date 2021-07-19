@@ -102,7 +102,8 @@ func (m *Server) acceptConn() (*Connection, error) {
 		defer m.connLock.Unlock()
 		if len(m.connections) >= m.config.MaxConnections {
 			netConn.Close()
-			return nil, ErrServerConnectionsLimited
+			log.Errorf("accept connection fail, %s", ErrServerConnectionsLimited.Error())
+			continue
 		}
 		if conn, err := NewConnection(nil, m, netConn, RoleServer, int(m.config.TcpWriteQueueLen)); err == nil {
 			m.connections[netConn.RemoteAddr().String()] = conn
@@ -183,14 +184,17 @@ func (m *Server) StartListenTLS(certFile, keyFile string) error {
 
 //stop server
 func (m *Server) Stop(err error) {
-	log.Errorf("server stopped, %s", err.Error())
+	if err != nil {
+		log.Errorf("server stopped, %s", err.Error())
+	} else {
+		log.Logf("server stopped")
+	}
 	m.SetError(err)
 	m.tcpListener.Close()
 
 	m.connLock.Lock()
 	defer m.connLock.Unlock()
 	for _, conn := range m.connections {
-		conn.SetCtxData(CtxServer, nil)
 		if conn.tcpConn != nil {
 			conn.tcpConn.Close()
 		}
