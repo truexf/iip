@@ -10,6 +10,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/truexf/iip"
@@ -30,6 +32,9 @@ var (
 )
 
 func main() {
+	LoadBalanceClientDemo()
+	return
+
 	fmt.Println("connect server: 9090")
 	var client *iip.Client
 	var err error
@@ -95,35 +100,73 @@ func main() {
 
 func LoadBalanceClientDemo() {
 	iip.GetLogger().SetLevel(iip.LogLevelDebug)
-	lbc, err := iip.NewLoadBalanceClient(iip.ClientConfig{
-		MaxConnections:        2,
-		MaxChannelsPerConn:    10,
+	// lbc, err := iip.NewLoadBalanceClient(iip.ClientConfig{
+	// 	MaxConnections:        100,
+	// 	MaxChannelsPerConn:    100,
+	// 	ChannelPacketQueueLen: 1000,
+	// 	TcpWriteQueueLen:      1000,
+	// 	TcpReadBufferSize:     16 * 1024,
+	// 	TcpWriteBufferSize:    16 * 1024,
+	// 	TcpConnectTimeout:     time.Second * 3,
+	// }, ":9090#1,:9090#2,:9090#3")
+	// if err != nil {
+	// 	fmt.Printf("new lbc fail,%s", err.Error())
+	// 	return
+	// }
+	lbc, err := iip.NewClient(iip.ClientConfig{
+		MaxConnections:        100,
+		MaxChannelsPerConn:    100,
 		ChannelPacketQueueLen: 1000,
 		TcpWriteQueueLen:      1000,
 		TcpReadBufferSize:     16 * 1024,
 		TcpWriteBufferSize:    16 * 1024,
 		TcpConnectTimeout:     time.Second * 3,
-	}, ":9090#1,:9090#2,:9090#3")
+	}, ":9090", nil)
 	if err != nil {
-		fmt.Printf("new lbc fail,%s", err.Error())
+		os.Stdout.WriteString(err.Error())
 		return
 	}
+
 	fmt.Println("new lbc ok")
-	var btsPrev []byte
-	defer os.Stdout.WriteString(lbc.Status())
+	echoData := `1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest` + fmt.Sprintf("%d", time.Now().UnixNano())
+	// echoData = strings.Dup(echoData, 10)
+	echoData = strings.Repeat(echoData, 10)
+	var wg sync.WaitGroup
+	wg.Add(50)
+	os.Stdout.WriteString(time.Now().String() + "\n")
 	for i := 0; i < 50; i++ {
-		bts, err := lbc.DoRequest(iip.PathServerConnectionStatis, iip.NewDefaultRequest(nil), time.Second)
-		if err != nil {
-			os.Stdout.WriteString(fmt.Sprintf("err: %s\n", err.Error()))
-		} else {
-			btsPrev = bts
-			os.Stdout.WriteString(fmt.Sprintf("%d, %d\n", i, len(bts)))
-			if i == 49 {
-				os.Stdout.WriteString(string(bts))
+		go func() {
+			defer wg.Done()
+			ch, err := lbc.NewChannel()
+			if err != nil {
+				os.Stdout.WriteString(err.Error() + "\n")
+				return
 			}
-		}
+			for i := 0; i < 10; i++ {
+				bts, err := ch.DoRequest("/echo", iip.NewDefaultRequest([]byte(echoData)), time.Second)
+				if err != nil {
+					os.Stdout.WriteString(fmt.Sprintf("err: %s\n", err.Error()))
+				} else {
+					if string(bts) != echoData {
+						panic("not equal")
+					}
+				}
+			}
+		}()
 	}
-	os.Stdout.WriteString(string(btsPrev))
+	wg.Wait()
+	os.Stdout.WriteString(time.Now().String() + "\n")
 	os.Stdout.Sync()
 	time.Sleep(time.Second)
 }

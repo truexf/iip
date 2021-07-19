@@ -435,7 +435,12 @@ func (m *Channel) handleClientLoop() {
 			if isServerStatusCompleted(pkt.Status) {
 				respCompletedChan := req.GetCtxData(CtxResponseChan)
 				if respCompletedChan != nil {
-					respCompletedChan.(chan []byte) <- pktWholeResponse.Data
+					notifyChan := respCompletedChan.(chan []byte)
+					select {
+					case <-notifyChan:
+					default:
+						notifyChan <- pktWholeResponse.Data
+					}
 				}
 				cnt := Count{WholePacketReceived: 1}
 				m.Count.Add(cnt)
