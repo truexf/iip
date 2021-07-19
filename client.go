@@ -476,6 +476,7 @@ func (m *LoadBalanceClient) DoRequest(path string, request Request, timeout time
 // severList格式：ip:port#weight,ip:port#weight,ip:port#weight,...
 // 0<weight<100,表明server的权重
 func NewLoadBalanceClient(cfg ClientConfig, serverList string) (*LoadBalanceClient, error) {
+	log.Debugf("new iip blc, serverlist: %s", serverList)
 	svrs := strings.Split(serverList, ",")
 	var addrList []*AddrWeightClient
 	for _, v := range svrs {
