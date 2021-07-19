@@ -107,6 +107,19 @@ func (m *Client) NewChannel() (*ClientChannel, error) {
 	return m.newChannel(conn)
 }
 
+func (m *Client) wrapperChannel(c *Channel) *ClientChannel {
+	if c == nil {
+		return nil
+	}
+	ret := &ClientChannel{
+		internalChannel:         c,
+		client:                  m,
+		uncompletedRequestQueue: c.GetCtxData(CtxUncompletedRequestChan).(*goutil.LinkedList),
+	}
+	c.SetCtxData(CtxClientChannel, ret)
+	return ret
+}
+
 func (m *Client) newChannel(conn *Connection) (*ClientChannel, error) {
 	c := &ClientChannel{
 		internalChannel:         conn.Channels[0],
@@ -126,15 +139,12 @@ func (m *Client) newChannel(conn *Connection) (*ClientChannel, error) {
 	}
 	ucrq := goutil.NewLinkedList(true)
 	if resp.ChannelId > 0 && resp.Code == 0 {
-		c := &ClientChannel{
-			internalChannel: conn.newChannel(false,
-				m.config.ChannelPacketQueueLen,
-				map[string]interface{}{CtxUncompletedRequestChan: ucrq, CtxClient: m},
-				nil,
-			),
-			client:                  m,
-			uncompletedRequestQueue: ucrq,
-		}
+		cInternal := conn.newChannel(false,
+			m.config.ChannelPacketQueueLen,
+			map[string]interface{}{CtxUncompletedRequestChan: ucrq, CtxClient: m},
+			nil,
+		)
+		c := m.wrapperChannel(cInternal)
 		return c, nil
 	} else {
 		return nil, fmt.Errorf(resp.Message)
@@ -156,20 +166,38 @@ func (m *Client) GetFreeChannel() (*ClientChannel, error) {
 	}
 	m.connLock.RUnlock()
 
-	chLen := 0
-	if freeConn != nil {
-		freeConn.ChannelsLock.RLock()
-		chLen = len(freeConn.Channels)
-		freeConn.ChannelsLock.RUnlock()
-	}
-	if freeConn == nil || chLen >= m.config.MaxChannelsPerConn {
+	if freeConn == nil {
 		var err error
 		if freeConn, err = m.newConnection(); err != nil {
 			return nil, err
 		}
 	}
 
-	return m.newChannel(freeConn)
+	if freeConn != nil {
+		freeConn.ChannelsLock.RLock()
+		defer freeConn.ChannelsLock.RUnlock()
+		var ch *Channel
+		minQueue := int(m.config.ChannelPacketQueueLen)
+		for k, v := range freeConn.Channels {
+			if k == 0 {
+				continue
+			}
+			qLen := len(v.receivedQueue)
+			if qLen < minQueue {
+				minQueue = qLen
+				ch = v
+			}
+		}
+
+		if ch != nil {
+			ret := ch.GetCtxData(CtxClientChannel).(*ClientChannel)
+			return ret, nil
+		} else if len(freeConn.Channels) < m.config.MaxChannelsPerConn {
+			return m.newChannel(freeConn)
+		}
+	} else {
+		return nil, ErrClientConnectionsLimited
+	}
 }
 
 func (m *Client) dialTLS() (net.Conn, error) {
