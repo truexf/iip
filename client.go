@@ -195,9 +195,9 @@ func (m *Client) GetFreeChannel() (*ClientChannel, error) {
 		} else if len(freeConn.Channels) < m.config.MaxChannelsPerConn {
 			return m.newChannel(freeConn)
 		}
-	} else {
-		return nil, ErrClientConnectionsLimited
 	}
+	
+	return nil, ErrClientConnectionsLimited
 }
 
 func (m *Client) dialTLS() (net.Conn, error) {
