@@ -69,6 +69,10 @@ func NewServer(config ServerConfig, listenAddr string, timeCountRangeFunc Ensure
 	return ret, nil
 }
 
+func (m *Server) GetListener() net.Listener {
+	return m.tcpListener
+}
+
 func (m *Server) AddCount(path string, count Count) {
 	m.statisLock.RLock()
 	defer m.statisLock.RLock()
