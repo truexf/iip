@@ -62,14 +62,10 @@ func LoadBalanceClientDemo() {
 		}()
 	}
 	wg.Wait()
-	os.Stdout.WriteString(fmt.Sprintf("%d milliseconds, %d requests, everage %d microsecond, read %d, rece done %d, rece %d, sent %d\n",
+	os.Stdout.WriteString(fmt.Sprintf("%d milliseconds, %d requests, everage %d microsecond, \n",
 		time.Since(tm)/time.Millisecond,
 		cnt,
-		time.Since(tm)/time.Microsecond/time.Duration(cnt),
-		Readcnt,
-		ReceDone,
-		Rece,
-		SendCnt))
+		time.Since(tm)/time.Microsecond/time.Duration(cnt)))
 	time.Sleep(time.Second)
 	if bts, err := lbc.DoRequest("/cc", NewDefaultRequest(nil), time.Second); err == nil {
 		os.Stdout.WriteString(string(bts) + "\n")
@@ -77,5 +73,4 @@ func LoadBalanceClientDemo() {
 		os.Stdout.WriteString(err.Error() + "\n")
 	}
 	os.Stdout.Sync()
-	return
 }
