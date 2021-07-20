@@ -184,6 +184,7 @@ func (m *Server) StartListenTLS(certFile, keyFile string) error {
 
 //stop server
 func (m *Server) Stop(err error) {
+	close(m.closeNotify)
 	if err != nil {
 		log.Errorf("server stopped, %s", err.Error())
 	} else {
@@ -200,8 +201,6 @@ func (m *Server) Stop(err error) {
 		}
 	}
 	m.connections = make(map[string]*Connection)
-
-	close(m.closeNotify)
 }
 
 func (m *Server) RegisterHandler(path string, handler ServerPathHandler, timeCountRangeFunc EnsureTimeRangeFunc) error {

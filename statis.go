@@ -87,21 +87,21 @@ func (m *TimeCount) Record(duration int64, ensureFunc EnsureTimeRangeFunc) {
 	r := ensureFunc(duration)
 	switch r {
 	case TimeRange1:
-		m.RangeCount[0] += duration
+		m.RangeCount[0] += 1
 	case TimeRange2:
-		m.RangeCount[1] += duration
+		m.RangeCount[1] += 1
 	case TimeRange3:
-		m.RangeCount[2] += duration
+		m.RangeCount[2] += 1
 	case TimeRange4:
-		m.RangeCount[3] += duration
+		m.RangeCount[3] += 1
 	case TimeRange5:
-		m.RangeCount[4] += duration
+		m.RangeCount[4] += 1
 	case TimeRange6:
-		m.RangeCount[5] += duration
+		m.RangeCount[5] += 1
 	case TimeRange7:
-		m.RangeCount[6] += duration
+		m.RangeCount[6] += 1
 	default:
-		m.RangeCount[7] += duration
+		m.RangeCount[7] += 1
 	}
 
 }
