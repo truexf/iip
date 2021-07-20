@@ -548,7 +548,6 @@ func (m *Connection) writeLoop() {
 			if _, err := WritePacket(pkt, m.tcpConn); err != nil {
 				m.Close(err)
 				return
-			} else {
 			}
 		case <-m.closeNotify:
 			return
