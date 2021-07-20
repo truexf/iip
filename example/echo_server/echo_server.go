@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"net/url"
-	"sync/atomic"
 
 	"github.com/truexf/iip"
 )
@@ -26,12 +25,6 @@ func (m *EchoServerHandler) Handle(path string, queryParams url.Values, requestD
 		}
 	} else if path == "/echo_benchmark" {
 		return requestData, nil
-	} else if path == "/cc" {
-		ret := []byte(fmt.Sprintf("rece %d, rece done %d, send %d", iip.SvrRece, iip.SvrReceDone, iip.SendCnt))
-		atomic.StoreUint32(&iip.SvrRece, 0)
-		atomic.StoreUint32(&iip.SvrReceDone, 0)
-		atomic.StoreUint32(&iip.SendCnt, 0)
-		return ret, nil
 	}
 	return nil, fmt.Errorf("path %s not support", path)
 
