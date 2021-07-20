@@ -7,43 +7,75 @@ package iip
 import (
 	"fmt"
 	"os"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
 func TestLoadBalanceClient(t *testing.T) {
-	log.SetLevel(LogLevelDebug)
-	lbc, err := NewLoadBalanceClient(ClientConfig{
-		MaxConnections:        2,
-		MaxChannelsPerConn:    2,
-		ChannelPacketQueueLen: 1000,
-		TcpWriteQueueLen:      1000,
-		TcpReadBufferSize:     16 * 1024,
-		TcpWriteBufferSize:    16 * 1024,
-		TcpConnectTimeout:     time.Second * 3,
-	}, ":9090#1,:9090#2,:9090#3")
+	LoadBalanceClientDemo()
+}
+
+func LoadBalanceClientDemo() {
+	GetLogger().SetLevel(LogLevelDebug)
+	lbc, err := NewLoadBalanceClient(100, 1000, ":9090#1,:9090#1,:9090#1")
 	if err != nil {
 		fmt.Printf("new lbc fail,%s", err.Error())
 		return
 	}
+
 	fmt.Println("new lbc ok")
-	var btsPrev []byte
-	defer fmt.Println(lbc.Status())
+	echoData := `1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest` + fmt.Sprintf("%d", time.Now().UnixNano())
+	echoData = strings.Repeat(echoData, 10)
+	var wg sync.WaitGroup
+	wg.Add(50)
+	tm := time.Now()
+	var cnt uint32 = 0
 	for i := 0; i < 50; i++ {
-		bts, err := lbc.DoRequest(PathServerConnectionStatis, NewDefaultRequest(nil), time.Second)
-		if err != nil {
-			os.Stdout.WriteString(fmt.Sprintf("err: %s\n", err.Error()))
-			os.Stdout.WriteString(string(btsPrev))
-			return
-		} else {
-			btsPrev = bts
-			os.Stdout.WriteString(fmt.Sprintf("%d, %d\n", i, len(bts)))
-			if i == 49 {
-				os.Stdout.WriteString(string(bts))
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				bts, err := lbc.DoRequest("/echo", NewDefaultRequest([]byte(echoData)), time.Second*3)
+				if err != nil {
+					os.Stdout.WriteString(fmt.Sprintf("err: %s\n", err.Error()))
+				} else {
+					if string(bts) != echoData {
+						panic("not equal")
+					} else {
+						atomic.AddUint32(&cnt, 1)
+					}
+				}
 			}
-		}
+		}()
+	}
+	wg.Wait()
+	os.Stdout.WriteString(fmt.Sprintf("%d milliseconds, %d requests, everage %d microsecond, read %d, rece done %d, rece %d, sent %d\n",
+		time.Since(tm)/time.Millisecond,
+		cnt,
+		time.Since(tm)/time.Microsecond/time.Duration(cnt),
+		Readcnt,
+		ReceDone,
+		Rece,
+		SendCnt))
+	time.Sleep(time.Second)
+	if bts, err := lbc.DoRequest("/cc", NewDefaultRequest(nil), time.Second); err == nil {
+		os.Stdout.WriteString(string(bts) + "\n")
+	} else {
+		os.Stdout.WriteString(err.Error() + "\n")
 	}
 	os.Stdout.Sync()
-	time.Sleep(time.Second)
-
+	return
 }
