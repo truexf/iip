@@ -487,6 +487,7 @@ type Connection struct {
 	Client        *Client //not nil if client side
 	Server        *Server //not nil if server side
 	Channels      map[uint32]*Channel
+	channelCount  int32
 	MaxChannelId  uint32
 	FreeChannleId map[uint32]struct{}
 	ChannelsLock  sync.RWMutex
@@ -547,6 +548,7 @@ func (m *Connection) writeLoop() {
 			if _, err := WritePacket(pkt, m.tcpConn); err != nil {
 				m.Close(err)
 				return
+			} else {
 			}
 		case <-m.closeNotify:
 			return
@@ -625,6 +627,7 @@ func (m *Connection) newChannel(sys bool, queueLen uint32, clientCtx map[string]
 	m.ChannelsLock.Lock()
 	defer m.ChannelsLock.Unlock()
 	m.Channels[ret.Id] = ret
+	atomic.AddInt32(&m.channelCount, 1)
 	if m.Role == RoleServer {
 		for k, v := range serverCtx {
 			ret.SetCtxData(k, v)
@@ -657,6 +660,7 @@ func (m *Connection) removeChannel(c *Channel) {
 		m.ChannelsLock.Lock()
 		defer m.ChannelsLock.Unlock()
 		delete(m.Channels, c.Id)
+		atomic.AddInt32(&m.channelCount, -1)
 		m.FreeChannleId[c.Id] = struct{}{}
 	}
 }
