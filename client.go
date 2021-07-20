@@ -449,7 +449,7 @@ func (m *LoadBalanceClient) getTaskClient() (*EvaluatedClient, error) {
 		if !m.activeClients[idx].paused {
 			return m.activeClients[idx], nil
 		} else {
-			if time.Since(m.activeClients[idx].lastRequest) > time.Second*15 {
+			if time.Since(m.activeClients[idx].lastRequest) > time.Second*5 {
 				return m.activeClients[idx], nil
 			}
 		}
