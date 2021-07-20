@@ -9,11 +9,11 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/truexf/goutil"
@@ -38,10 +38,38 @@ type Client struct {
 	config      ClientConfig
 	serverAddr  string
 	connections []*Connection
+	connCount   int32
 	connLock    sync.RWMutex
 	handler     *clientHandler
 	Count       *Count
 	Measure     *Measure
+}
+
+func (m *Client) GetConnectionStatis() (respData []byte, e error) {
+	conns := make(map[int]*Connection)
+	m.connLock.Lock()
+	for i, v := range m.connections {
+		conns[i] = v
+	}
+	m.connLock.Unlock()
+
+	ret := make(map[int]*ConnectionSatis)
+	for i, v := range conns {
+		rec := &ConnectionSatis{WriteQueue: len(v.tcpWriteQueue), Count: v.Count, Channels: make(map[uint32]struct {
+			ReceiveQueue int
+			Count        *Count
+		})}
+		v.ChannelsLock.RLock()
+		for cId, c := range v.Channels {
+			rec.Channels[cId] = struct {
+				ReceiveQueue int
+				Count        *Count
+			}{ReceiveQueue: len(c.receivedQueue), Count: c.Count}
+		}
+		v.ChannelsLock.RUnlock()
+		ret[i] = rec
+	}
+	return json.Marshal(&ret)
 }
 
 type ClientChannel struct {
@@ -107,19 +135,6 @@ func (m *Client) NewChannel() (*ClientChannel, error) {
 	return m.newChannel(conn)
 }
 
-func (m *Client) wrapperChannel(c *Channel) *ClientChannel {
-	if c == nil {
-		return nil
-	}
-	ret := &ClientChannel{
-		internalChannel:         c,
-		client:                  m,
-		uncompletedRequestQueue: c.GetCtxData(CtxUncompletedRequestChan).(*goutil.LinkedList),
-	}
-	c.SetCtxData(CtxClientChannel, ret)
-	return ret
-}
-
 func (m *Client) newChannel(conn *Connection) (*ClientChannel, error) {
 	c := &ClientChannel{
 		internalChannel:         conn.Channels[0],
@@ -139,66 +154,16 @@ func (m *Client) newChannel(conn *Connection) (*ClientChannel, error) {
 	}
 	ucrq := goutil.NewLinkedList(true)
 	if resp.ChannelId > 0 && resp.Code == 0 {
-		cInternal := conn.newChannel(false,
+		c := &ClientChannel{client: m, uncompletedRequestQueue: ucrq}
+		c.internalChannel = conn.newChannel(false,
 			m.config.ChannelPacketQueueLen,
-			map[string]interface{}{CtxUncompletedRequestChan: ucrq, CtxClient: m},
+			map[string]interface{}{CtxUncompletedRequestChan: ucrq, CtxClient: m, CtxClientChannel: c},
 			nil,
 		)
-		c := m.wrapperChannel(cInternal)
 		return c, nil
 	} else {
 		return nil, fmt.Errorf(resp.Message)
 	}
-}
-
-// 获取一个最不忙碌的channel:
-// 1. 找到发送队列最短的connection，如果其channel数<limit, 则在其上创建一个channel返回，否则:
-// 2. 如果connection数<limit, newConnection,并在其上创建一个channel返回，否则返回 nil, error
-func (m *Client) GetFreeChannel() (*ClientChannel, error) {
-	var freeConn *Connection
-	sendQueueLen := math.MaxInt32
-	m.connLock.RLock()
-	for _, v := range m.connections {
-		if sendQueueLen > len(v.tcpWriteQueue) {
-			sendQueueLen = len(v.tcpWriteQueue)
-			freeConn = v
-		}
-	}
-	m.connLock.RUnlock()
-
-	if freeConn == nil {
-		var err error
-		if freeConn, err = m.newConnection(); err != nil {
-			return nil, err
-		}
-	}
-
-	if freeConn != nil {
-		freeConn.ChannelsLock.RLock()
-		var ch *Channel
-		minQueue := int(m.config.ChannelPacketQueueLen)
-		for k, v := range freeConn.Channels {
-			if k == 0 {
-				continue
-			}
-			qLen := len(v.receivedQueue)
-			if qLen < minQueue {
-				minQueue = qLen
-				ch = v
-			}
-		}
-		chLen := len(freeConn.Channels)
-		freeConn.ChannelsLock.RUnlock()
-
-		if ch != nil {
-			ret := ch.GetCtxData(CtxClientChannel).(*ClientChannel)
-			return ret, nil
-		} else if chLen < m.config.MaxChannelsPerConn {
-			return m.newChannel(freeConn)
-		}
-	}
-
-	return nil, ErrClientConnectionsLimited
 }
 
 func (m *Client) dialTLS() (net.Conn, error) {
@@ -251,6 +216,7 @@ func (m *Client) newConnection() (*Connection, error) {
 	m.connLock.Lock()
 	m.connections = append(m.connections, ret)
 	m.connLock.Unlock()
+	atomic.AddInt32(&m.connCount, 1)
 	return ret, nil
 }
 
@@ -259,6 +225,7 @@ func (m *Client) removeConnection(conn *Connection) {
 	defer m.connLock.Unlock()
 	for i, v := range m.connections {
 		if v == conn {
+			atomic.AddInt32(&m.connCount, -1)
 			conns := m.connections[:i]
 			if i < len(m.connections) {
 				conns = append(conns, m.connections[i+1:]...)
@@ -272,13 +239,10 @@ func (m *Client) getFreeConnection() (*Connection, error) {
 	var conn *Connection = nil
 	m.connLock.Lock()
 	for _, v := range m.connections {
-		v.ChannelsLock.Lock()
 		if len(v.Channels) < m.config.MaxChannelsPerConn {
 			conn = v
-			v.ChannelsLock.Unlock()
 			break
 		}
-		v.ChannelsLock.Unlock()
 	}
 	m.connLock.Unlock()
 	var err error
@@ -410,15 +374,47 @@ func (m *ClientChannel) GetCtx(key string) interface{} {
 }
 
 type EvaluatedClient struct {
+	blc               *LoadBalanceClient
 	paused            bool
 	lastRequest       time.Time
 	client            *Client
+	connIndex         int
 	requestErrorCount int
 	err               error
+	getChannelLock    sync.Mutex
+}
+
+func (m *EvaluatedClient) getTaskChannel() (*ClientChannel, error) {
+	m.getChannelLock.Lock()
+	defer m.getChannelLock.Unlock()
+
+	if m.client == nil {
+		return nil, fmt.Errorf("not init yet")
+	}
+	m.connIndex++
+	if m.connIndex >= int(m.client.connCount) {
+		m.connIndex = 0
+	}
+	if m.client.connCount < int32(m.blc.serverKeepConns) {
+		if conn, err := m.client.newConnection(); err != nil {
+			return nil, fmt.Errorf("connect to %s fail, %s", m.client.serverAddr, err.Error())
+		} else {
+			if c, err := m.client.newChannel(conn); err != nil {
+				return nil, fmt.Errorf("new channel to %s fail, %s", m.client.serverAddr, err.Error())
+			} else {
+				conn.SetCtxData(CtxLblClientChannel, c)
+				return c, nil
+			}
+		}
+	} else {
+		//Channels[0]是默认建立的sys channel,每个lbl connection只额外建立一个channel[1]
+		return m.client.connections[m.connIndex].GetCtxData(CtxLblClientChannel).(*ClientChannel), nil
+
+	}
 }
 
 func (m *EvaluatedClient) DoRequest(path string, request Request, timeout time.Duration) ([]byte, error) {
-	channel, err := m.client.GetFreeChannel()
+	channel, err := m.getTaskChannel()
 	if err != nil {
 		m.err = err
 		m.paused = true
@@ -431,18 +427,14 @@ func (m *EvaluatedClient) DoRequest(path string, request Request, timeout time.D
 // 由一组server提供无状态服务的场景下，LoadBalanceClient根据可配置的负载权重、keepalive检测，自动调节对不同server的请求频率
 // LoadBalanceClient内部管理多个client
 type LoadBalanceClient struct {
-	activeClients []*EvaluatedClient
-	idx           int
-	clientsLock   sync.RWMutex
+	serverMaxConns  int
+	serverKeepConns int
+	activeClients   []*EvaluatedClient
+	clientsLock     sync.RWMutex
+	idx             int //当前轮转的server index
 }
 
-type AddrWeightClient struct {
-	Addr   string
-	Weight int
-	client *Client
-}
-
-func (m *LoadBalanceClient) getFreeClient() (*EvaluatedClient, error) {
+func (m *LoadBalanceClient) getTaskClient() (*EvaluatedClient, error) {
 	m.clientsLock.RLock()
 	defer m.clientsLock.RUnlock()
 	idx := m.idx
@@ -479,8 +471,43 @@ func (m *LoadBalanceClient) Status() string {
 	return ret
 }
 
+func (m *LoadBalanceClient) GetConnectionStatis() ([]byte, error) {
+	retFinal := make(map[string]map[int]*ConnectionSatis)
+	m.clientsLock.RLock()
+	defer m.clientsLock.RLock()
+	for _, ec := range m.activeClients {
+		c := ec.client
+		conns := make(map[int]*Connection)
+		c.connLock.Lock()
+		for i, v := range c.connections {
+			conns[i] = v
+		}
+		c.connLock.Unlock()
+
+		ret := make(map[int]*ConnectionSatis)
+		for i, v := range conns {
+			rec := &ConnectionSatis{WriteQueue: len(v.tcpWriteQueue), Count: v.Count, Channels: make(map[uint32]struct {
+				ReceiveQueue int
+				Count        *Count
+			})}
+			v.ChannelsLock.RLock()
+			for cId, c := range v.Channels {
+				rec.Channels[cId] = struct {
+					ReceiveQueue int
+					Count        *Count
+				}{ReceiveQueue: len(c.receivedQueue), Count: c.Count}
+			}
+			v.ChannelsLock.RUnlock()
+			ret[i] = rec
+		}
+
+		retFinal[c.serverAddr] = ret
+	}
+	return json.Marshal(retFinal)
+}
+
 func (m *LoadBalanceClient) DoRequest(path string, request Request, timeout time.Duration) ([]byte, error) {
-	client, err := m.getFreeClient()
+	client, err := m.getTaskClient()
 	if err != nil {
 		return nil, err
 	}
@@ -501,10 +528,20 @@ func (m *LoadBalanceClient) DoRequest(path string, request Request, timeout time
 	return ret, err
 }
 
-// 创建一个LoadBalanceClient
-// severList格式：ip:port#weight,ip:port#weight,ip:port#weight,...
-// 0<weight<100,表明server的权重
-func NewLoadBalanceClient(cfg ClientConfig, serverList string) (*LoadBalanceClient, error) {
+type AddrWeightClient struct {
+	Addr   string
+	Weight int
+	client *Client
+}
+
+// 创建一个LoadBalanceClient，
+// severList格式：ip:port#weight,ip:port#weight,ip:port#weight,...，
+// 0<weight<100,表明server的权重。weight大于1，相当于增加weight-1个相同地址的server
+// 每个server地址保持serverKeepConns个活跃连接，如果并发突增超过serverKeepConns，则自动创建新连接。
+// serverMaxConns指定单个server最大连接数，所有的server都超出serverMaxConns，则返回ErrClientConnectionsLimited错误,否则以其他有空的server代其服务
+// server任务分配以轮转模式运行
+// 由于load balance客户端一般式针对同类型的业务，因此没有必要区分多个channel,内部每个connection开启一个channel.
+func NewLoadBalanceClient(serverKeepConns int, serverMaxConns int, serverList string) (*LoadBalanceClient, error) {
 	log.Debugf("new iip blc, serverlist: %s", serverList)
 	svrs := strings.Split(serverList, ",")
 	var addrList []*AddrWeightClient
@@ -535,19 +572,34 @@ func NewLoadBalanceClient(cfg ClientConfig, serverList string) (*LoadBalanceClie
 
 	var addrListFinal []*AddrWeightClient
 	for _, v := range addrList {
+		cfg := ClientConfig{MaxConnections: serverMaxConns,
+			MaxChannelsPerConn:    3,
+			ChannelPacketQueueLen: 1000,
+			TcpWriteQueueLen:      1000,
+			TcpConnectTimeout:     time.Second * 3,
+			TcpReadBufferSize:     1024 * 32,
+			TcpWriteBufferSize:    1024 * 32,
+		}
 		if client, err := NewClient(cfg, v.Addr, nil); err == nil {
 			v.client = client
 			addrListFinal = append(addrListFinal, v)
 		}
 	}
 
-	ret := &LoadBalanceClient{}
+	ret := &LoadBalanceClient{serverMaxConns: serverMaxConns, serverKeepConns: serverKeepConns}
+	if ret.serverKeepConns < 1 {
+		ret.serverKeepConns = 1
+	}
+	if ret.serverMaxConns < 1 {
+		ret.serverMaxConns = 1
+	}
+
 	exists := false
 	for {
 		for _, v := range addrListFinal {
 			if v.Weight > 0 {
 				v.Weight--
-				ret.activeClients = append(ret.activeClients, &EvaluatedClient{client: v.client})
+				ret.activeClients = append(ret.activeClients, &EvaluatedClient{client: v.client, blc: ret})
 				if v.Weight > 0 {
 					exists = true
 				}
