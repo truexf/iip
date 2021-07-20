@@ -8,7 +8,7 @@ package iip
 const (
 	MaxPathLen        uint32 = 2048             //packet的path字段最大字节数
 	MaxPacketSize     uint32 = 16 * 1024 * 1024 //packet最大字节数
-	PacketReadBufSize uint32 = 32 * 1024        //从他tcp fd读取数据用于缓存解析的缓冲区的大小
+	PacketReadBufSize uint32 = 512 * 1024       //从他tcp fd读取数据用于缓存解析的缓冲区的大小
 
 	//系统路径
 	PathNewChannel             string = "/sys/new_channel"
@@ -43,7 +43,8 @@ const (
 	CtxServer                 string = "/ctx/sys/server"
 	CtxClient                 string = "/ctx/sys/client"
 	CtxResponseChan           string = "/ctx/sys/response_chan"
-	CtxUncompletedRequestChan string = "/ctx/sys/uncreq_chan" //见Client.uncompletedRequestQueue
-	CtxRequest                string = "/ctx/sys/request"     //在client handle函数里,可以通过channel.GetCtxData(CtxRequest)获得当前响应对应的请求
-	CtxClientChannel          string = "/ctx/sys/client_chan" //
+	CtxUncompletedRequestChan string = "/ctx/sys/uncreq_chan"     //见Client.uncompletedRequestQueue
+	CtxRequest                string = "/ctx/sys/request"         //在client handle函数里,可以通过channel.GetCtxData(CtxRequest)获得当前响应对应的请求
+	CtxClientChannel          string = "/ctx/sys/client_chan"     //
+	CtxLblClientChannel       string = "/ctx/sys/lbl_client_chan" //
 )
