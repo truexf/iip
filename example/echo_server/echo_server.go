@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"net/url"
+	"sync/atomic"
 
 	"github.com/truexf/iip"
 )
@@ -18,13 +19,19 @@ type EchoServerHandler struct {
 func (m *EchoServerHandler) Handle(path string, queryParams url.Values, requestData []byte, dataCompleted bool) ([]byte, error) {
 	if path == "/echo" {
 		if dataCompleted {
-			fmt.Printf("%s received: %s\n", path, string(requestData))
+			// fmt.Printf("%s received: %s\n", path, string(requestData))
 			return requestData, nil
 		} else {
 			return nil, iip.ErrPacketContinue
 		}
 	} else if path == "/echo_benchmark" {
 		return requestData, nil
+	} else if path == "/cc" {
+		ret := []byte(fmt.Sprintf("rece %d, rece done %d, send %d", iip.SvrRece, iip.SvrReceDone, iip.SendCnt))
+		atomic.StoreUint32(&iip.SvrRece, 0)
+		atomic.StoreUint32(&iip.SvrReceDone, 0)
+		atomic.StoreUint32(&iip.SendCnt, 0)
+		return ret, nil
 	}
 	return nil, fmt.Errorf("path %s not support", path)
 
@@ -52,6 +59,7 @@ func main() {
 	echoHandler := &EchoServerHandler{}
 	server.RegisterHandler("/echo", echoHandler, nil)
 	server.RegisterHandler("/echo_benchmark", echoHandler, nil)
+	server.RegisterHandler("/cc", echoHandler, nil)
 	flag.Parse()
 	tp := ""
 	if *certFile != "" && *keyFile != "" {

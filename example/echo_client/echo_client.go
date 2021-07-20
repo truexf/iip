@@ -10,8 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/truexf/iip"
@@ -32,9 +30,6 @@ var (
 )
 
 func main() {
-	LoadBalanceClientDemo()
-	return
-
 	fmt.Println("connect server: 9090")
 	var client *iip.Client
 	var err error
@@ -96,77 +91,4 @@ func main() {
 		fmt.Println("input some words:")
 	}
 
-}
-
-func LoadBalanceClientDemo() {
-	iip.GetLogger().SetLevel(iip.LogLevelDebug)
-	// lbc, err := iip.NewLoadBalanceClient(iip.ClientConfig{
-	// 	MaxConnections:        100,
-	// 	MaxChannelsPerConn:    100,
-	// 	ChannelPacketQueueLen: 1000,
-	// 	TcpWriteQueueLen:      1000,
-	// 	TcpReadBufferSize:     16 * 1024,
-	// 	TcpWriteBufferSize:    16 * 1024,
-	// 	TcpConnectTimeout:     time.Second * 3,
-	// }, ":9090#1,:9090#2,:9090#3")
-	// if err != nil {
-	// 	fmt.Printf("new lbc fail,%s", err.Error())
-	// 	return
-	// }
-	lbc, err := iip.NewClient(iip.ClientConfig{
-		MaxConnections:        100,
-		MaxChannelsPerConn:    100,
-		ChannelPacketQueueLen: 1000,
-		TcpWriteQueueLen:      1000,
-		TcpReadBufferSize:     16 * 1024,
-		TcpWriteBufferSize:    16 * 1024,
-		TcpConnectTimeout:     time.Second * 3,
-	}, ":9090", nil)
-	if err != nil {
-		os.Stdout.WriteString(err.Error())
-		return
-	}
-
-	fmt.Println("new lbc ok")
-	echoData := `1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
-					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
-					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
-					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
-					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
-					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
-					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
-					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
-					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
-					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
-					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
-					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest` + fmt.Sprintf("%d", time.Now().UnixNano())
-	// echoData = strings.Dup(echoData, 10)
-	echoData = strings.Repeat(echoData, 10)
-	var wg sync.WaitGroup
-	wg.Add(50)
-	os.Stdout.WriteString(time.Now().String() + "\n")
-	for i := 0; i < 50; i++ {
-		go func() {
-			defer wg.Done()
-			ch, err := lbc.NewChannel()
-			if err != nil {
-				os.Stdout.WriteString(err.Error() + "\n")
-				return
-			}
-			for i := 0; i < 10; i++ {
-				bts, err := ch.DoRequest("/echo", iip.NewDefaultRequest([]byte(echoData)), time.Second)
-				if err != nil {
-					os.Stdout.WriteString(fmt.Sprintf("err: %s\n", err.Error()))
-				} else {
-					if string(bts) != echoData {
-						panic("not equal")
-					}
-				}
-			}
-		}()
-	}
-	wg.Wait()
-	os.Stdout.WriteString(time.Now().String() + "\n")
-	os.Stdout.Sync()
-	time.Sleep(time.Second)
 }
