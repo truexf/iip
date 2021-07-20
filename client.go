@@ -522,6 +522,7 @@ func (m *LoadBalanceClient) DoRequest(path string, request Request, timeout time
 			client.requestErrorCount--
 		}
 		if client.requestErrorCount == 0 {
+			client.err = nil
 			client.paused = false
 		}
 	}
