@@ -422,7 +422,11 @@ func (m *EvaluatedClient) DoRequest(path string, request Request, timeout time.D
 	}
 	m.paused = false
 	m.lastRequest = time.Now()
-	return channel.DoRequest(path, request, timeout)
+	if ret, err := channel.DoRequest(path, request, timeout); err == nil {
+		return ret, err
+	} else {
+		return ret, fmt.Errorf("request [%s], %s", m.client.serverAddr, err.Error())
+	}
 }
 
 // 由一组server提供无状态服务的场景下，LoadBalanceClient根据可配置的负载权重、keepalive检测，自动调节对不同server的请求频率
@@ -515,7 +519,8 @@ func (m *LoadBalanceClient) DoRequest(path string, request Request, timeout time
 	ret, err := client.DoRequest(path, request, timeout)
 	if err != nil {
 		client.requestErrorCount++
-		if client.requestErrorCount > 3 {
+		if client.requestErrorCount > 5 {
+			log.Errorf("[%s] error 5+ times, paused", client.client.serverAddr)
 			client.paused = true
 		}
 	} else {
