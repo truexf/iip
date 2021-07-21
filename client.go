@@ -420,6 +420,7 @@ func (m *EvaluatedClient) DoRequest(path string, request Request, timeout time.D
 		m.paused = true
 		return nil, err
 	}
+	m.paused = false
 	m.lastRequest = time.Now()
 	return channel.DoRequest(path, request, timeout)
 }
