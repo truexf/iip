@@ -103,18 +103,20 @@ func (m *Server) acceptConn() (*Connection, error) {
 			}
 		}
 		m.connLock.Lock()
-		defer m.connLock.Unlock()
 		if len(m.connections) >= m.config.MaxConnections {
 			netConn.Close()
 			log.Errorf("accept connection fail, %s", ErrServerConnectionsLimited.Error())
+			m.connLock.Unlock()
 			continue
 		}
 		if conn, err := NewConnection(nil, m, netConn, RoleServer, int(m.config.TcpWriteQueueLen)); err == nil {
 			m.connections[netConn.RemoteAddr().String()] = conn
 			conn.SetCtxData(CtxServer, m)
+			m.connLock.Unlock()
 			return conn, nil
 		} else {
 			netConn.Close()
+			m.connLock.Unlock()
 			return nil, err
 		}
 	}
