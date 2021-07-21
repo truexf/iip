@@ -287,7 +287,7 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 	if len(pkt.Data) == 0 {
 		return nil, fmt.Errorf("request.Data() is nil")
 	}
-	respChan := make(chan []byte)
+	respChan := acquireNotifyChan() //make(chan []byte)
 	request.SetCtxData(CtxResponseChan, respChan)
 	m.sendRequestLock.Lock()
 	if err := m.internalChannel.SendPacket(pkt); err != nil {
@@ -300,7 +300,7 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 
 	defer func() {
 		request.RemoveCtxData(CtxResponseChan)
-		close(respChan)
+		releaseNotifyChan(respChan)
 	}()
 
 	if timeout > 0 {

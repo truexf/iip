@@ -125,3 +125,28 @@ func ValidatePath(path string) bool {
 	}
 	return true
 }
+
+var responseNotifyChanPool sync.Pool
+
+func acquireNotifyChan() chan []byte {
+	v := responseNotifyChanPool.Get()
+	if v == nil {
+		return make(chan []byte, 1)
+	} else {
+		ret := v.(chan []byte)
+		select {
+		case <-ret:
+		default:
+		}
+		return ret
+	}
+
+}
+
+func releaseNotifyChan(c chan []byte) {
+	select {
+	case <-c:
+	default:
+	}
+	responseNotifyChanPool.Put(c)
+}
