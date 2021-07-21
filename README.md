@@ -6,7 +6,7 @@
 * 文件下载server示例(支持断点续传): [example/file_server/file_server.go](https://github.com/truexf/iip/blob/master/example/file_server/file_server.go)
 * 文件上传client示例(支持断点续传): [example/upload_client/upload_client.go](https://github.com/truexf/iip/blob/master/example/upload_client/upload_client.go)
 * 文件上传server示例(支持断点续传): [example/upload_server/upload_server.go](https://github.com/truexf/iip/blob/master/example/upload_server/upload_server.go)
-* benchmark: [client_server_test.go](https://github.com/truexf/iip/blob/master/client_server_test.go)
+* load-balance-client高并发请求示例: [loadbalanceclient_test.go](https://github.com/truexf/iip/blob/master/loadbalanceclient_test.go)
 
 ## IIP是什么？ 
 基于TCP的基础通讯协议及框架(IIP,Internal Interaction Protocol),该协议可作为RPC接口调用的底层协议，如同http2之于gRPC，本项目基于该协议实现了client/server的基础框架。
