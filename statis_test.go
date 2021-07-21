@@ -5,7 +5,6 @@
 package iip
 
 import (
-	"fmt"
 	"testing"
 	"time"
 )
@@ -53,14 +52,14 @@ func TestServerCount(t *testing.T) {
 	// }
 	// fmt.Println(string(bts))
 	echoData := []byte(`{"time_unit": "microsecond"}`)
-	bts, err := channel.DoRequest(PathServerStatis, NewDefaultRequest(echoData), time.Second)
+	_, err = channel.DoRequest(PathServerStatis, NewDefaultRequest(echoData), time.Second)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	fmt.Println(string(bts))
-	bts, err = channel.DoRequest(PathServerConnectionStatis, NewDefaultRequest(echoData), time.Second*3)
+	// fmt.Println(string(bts))
+	_, err = channel.DoRequest(PathServerConnectionStatis, NewDefaultRequest(echoData), time.Second*3)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	fmt.Println(string(bts))
+	// fmt.Println(string(bts))
 }

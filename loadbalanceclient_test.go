@@ -47,7 +47,7 @@ func LoadBalanceClientDemo() {
 	for i := 0; i < 50; i++ {
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for j := 0; j < 10000; j++ {
 				bts, err := lbc.DoRequest("/echo", NewDefaultRequest([]byte(echoData)), time.Second*3)
 				if err != nil {
 					os.Stdout.WriteString(fmt.Sprintf("err: %s\n", err.Error()))
@@ -67,10 +67,10 @@ func LoadBalanceClientDemo() {
 		cnt,
 		time.Since(tm)/time.Microsecond/time.Duration(cnt)))
 	time.Sleep(time.Second)
-	if bts, err := lbc.DoRequest("/cc", NewDefaultRequest(nil), time.Second); err == nil {
-		os.Stdout.WriteString(string(bts) + "\n")
-	} else {
-		os.Stdout.WriteString(err.Error() + "\n")
-	}
+	// if bts, err := lbc.DoRequest("/cc", NewDefaultRequest(nil), time.Second); err == nil {
+	// 	os.Stdout.WriteString(string(bts) + "\n")
+	// } else {
+	// 	os.Stdout.WriteString(err.Error() + "\n")
+	// }
 	os.Stdout.Sync()
 }
