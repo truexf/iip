@@ -12,6 +12,7 @@
 * BenchmarkPFEchoClientServer: 普通iip client单个channel
 * BenchmarkPFEchoNetHttp：标准库 net/http 
 * BenchmarkPFIIPBalanceClient：iip load balance client  
+* 运行benchmark前需要先编译运行启动server端，server代码在example/echo_server/  编译：$ go build ./echo_server.go  启动: $ ./echo_server
 * 单核：
 ```
 $ GOMAXPROCS=1 go test -bench=. -naddr="192.168.2.98:9091" -lbcaddr="192.168.2.98:9090#2" -iipaddr="192.168.2.98:9090" -run="PF.*" -benchmem -benchtime=10s
