@@ -21,7 +21,7 @@ BenchmarkPFEchoNetHttp      	    3510	   3342903 ns/op	   51476 B/op	      64 al
 BenchmarkPFIIPBalanceClient 	    6043	   1942451 ns/op	   92033 B/op	      16 allocs/op
 ```
 
-四核:
+* 四核:
 ```
 $ GOMAXPROCS=4 go test -bench=. -naddr="192.168.2.98:9091" -lbcaddr="192.168.2.98:9090#2" -iipaddr="192.168.2.98:9090" -run="PF.*" -benchmem -benchtime=10s
 BenchmarkPFEchoClientServer-4   	    7243	   1589468 ns/op	   99418 B/op	      16 allocs/op
