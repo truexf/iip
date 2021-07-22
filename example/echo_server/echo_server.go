@@ -38,7 +38,7 @@ var (
 func main() {
 	fmt.Println("start listen at :9090")
 	server, err := iip.NewServer(iip.ServerConfig{
-		MaxConnections:        1000,
+		MaxConnections:        10000,
 		MaxChannelsPerConn:    10,
 		ChannelPacketQueueLen: 1000,
 		TcpWriteQueueLen:      1000,
@@ -52,7 +52,6 @@ func main() {
 	echoHandler := &EchoServerHandler{}
 	server.RegisterHandler("/echo", echoHandler, nil)
 	server.RegisterHandler("/echo_benchmark", echoHandler, nil)
-	server.RegisterHandler("/cc", echoHandler, nil)
 	flag.Parse()
 	tp := ""
 	if *certFile != "" && *keyFile != "" {

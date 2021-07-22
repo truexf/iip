@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestCreateNetPacket(t *testing.T) {
+func TestFNCreateNetPacket(t *testing.T) {
 	pkt := &Packet{
 		Path:      "/testpath",
 		Status:    Status8,
@@ -30,7 +30,7 @@ func TestCreateNetPacket(t *testing.T) {
 	}
 }
 
-func BenchmarkCreateNetPacket(t *testing.B) {
+func BenchmarkFNCreateNetPacket(t *testing.B) {
 	pkt := &Packet{
 		Path:      "/testpath",
 		Status:    Status8,
@@ -43,10 +43,10 @@ func BenchmarkCreateNetPacket(t *testing.B) {
 }
 
 func TestReadPacket(t *testing.T) {
-	TestCreateNetPacket(t)
+	TestFNCreateNetPacket(t)
 }
 
-func BenchmarkReadPacket(t *testing.B) {
+func BenchmarkFNReadPacket(t *testing.B) {
 	pkt := &Packet{
 		Path:      "/testpath",
 		Status:    Status8,
