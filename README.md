@@ -12,7 +12,7 @@
 * BenchmarkPFEchoClientServer: 普通iip client单个channel
 * BenchmarkPFEchoNetHttp：标准库 net/http 
 * BenchmarkPFIIPBalanceClient：iip load balance client  
-单核：
+* 单核：
 ```
 $ GOMAXPROCS=1 go test -bench=. -naddr="192.168.2.98:9091" -lbcaddr="192.168.2.98:9090#2" -iipaddr="192.168.2.98:9090" -run="PF.*" -benchmem -benchtime=10s
 BenchmarkPFEchoClientServer 	    5418	   1944837 ns/op	   99428 B/op	      16 allocs/op
@@ -28,7 +28,7 @@ BenchmarkPFEchoNetHttp-4        	   13854	    868070 ns/op	   51576 B/op	      6
 BenchmarkPFIIPBalanceClient-4   	   19844	    590167 ns/op	   85720 B/op	      15 allocs/op
 ```
 
-8核:
+* 八核:
 ```
 $ GOMAXPROCS=8 go test -bench=. -naddr="192.168.2.98:9091" -lbcaddr="192.168.2.98:9090#2" -iipaddr="192.168.2.98:9090" -run="PF.*" -benchmem -benchtime=10s
 BenchmarkPFEchoClientServer-8   	    7090	   1630507 ns/op	   99443 B/op	      16 allocs/op
