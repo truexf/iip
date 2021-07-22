@@ -7,6 +7,8 @@ package iip
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -62,6 +64,36 @@ func BenchmarkPFEchoClientServer(t *testing.B) {
 			}
 			if !bytes.Equal(bts, []byte(echoData)) {
 				t.Fatalf("response not same as request")
+			}
+		}
+	})
+}
+
+func BenchmarkPFEchoNetHttp(t *testing.B) {
+	LogClosing = false
+	echoData := `1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest` + fmt.Sprintf("%d", time.Now().UnixNano())
+	echoData = strings.Repeat(echoData, 10)
+	t.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			resp, err := http.Post("http://localhost:9091/echo_benchmark", "application/octet-stream", bytes.NewReader([]byte(echoData)))
+			if err != nil {
+				t.Fatalf(err.Error())
+			}
+			if bts, err := ioutil.ReadAll(resp.Body); err == nil {
+				if !bytes.Equal(bts, bts) {
+					t.Fatalf("response not same as request")
+				}
 			}
 		}
 	})
