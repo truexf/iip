@@ -6,6 +6,7 @@ package iip
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -21,8 +22,14 @@ func (m *EchoClientHandlerTest) Handle(path string, request Request, responseDat
 	return nil
 }
 
+var (
+	pfNetHttpServerAddr = flag.String("naddr", ":9091", "")
+	pfIIPServerAddr     = flag.String("iipaddr", ":9090", "")
+)
+
 //跑这个测试前须先在9090端口启动echo_server, echo_server在example/echo_server/echo_server.go
 func BenchmarkPFEchoClientServer(t *testing.B) {
+	flag.Parse()
 	LogClosing = false
 	client, err := NewClient(ClientConfig{
 		MaxConnections:        1000,
@@ -32,7 +39,7 @@ func BenchmarkPFEchoClientServer(t *testing.B) {
 		TcpReadBufferSize:     16 * 1024,
 		TcpWriteBufferSize:    16 * 1024,
 		TcpConnectTimeout:     time.Second * 3,
-	}, ":9090", nil)
+	}, *pfIIPServerAddr, nil)
 	if err != nil {
 		t.Fatalf("connect server fail")
 		return
@@ -70,6 +77,7 @@ func BenchmarkPFEchoClientServer(t *testing.B) {
 }
 
 func BenchmarkPFEchoNetHttp(t *testing.B) {
+	flag.Parse()
 	LogClosing = false
 	echoData := `1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
@@ -86,7 +94,7 @@ func BenchmarkPFEchoNetHttp(t *testing.B) {
 	echoData = strings.Repeat(echoData, 10)
 	t.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			resp, err := http.Post("http://localhost:9091/echo_benchmark", "application/octet-stream", bytes.NewReader([]byte(echoData)))
+			resp, err := http.Post(fmt.Sprintf("http://%s/echo_benchmark", *pfNetHttpServerAddr), "application/octet-stream", bytes.NewReader([]byte(echoData)))
 			if err != nil {
 				t.Fatalf(err.Error())
 			}

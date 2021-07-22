@@ -5,14 +5,19 @@
 package iip
 
 import (
+	"flag"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 )
 
+var (
+	pflbcIIPServerAddr = flag.String("lbcaddr", ":9090#1,:9090#1,:9090#1", "")
+)
+
 func BenchmarkPFBalanceClient(b *testing.B) {
-	lbc, err := NewLoadBalanceClient(100, 1000, ":9090#1,:9090#1,:9090#1")
+	lbc, err := NewLoadBalanceClient(100, 1000, *pflbcIIPServerAddr)
 	if err != nil {
 		b.Fatalf("new lbc fail,%s", err.Error())
 	}
