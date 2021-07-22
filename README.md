@@ -1,3 +1,6 @@
+## IIP是什么？ 
+基于TCP的基础通讯协议及框架(IIP,Internal Interaction Protocol),该协议可作为RPC接口调用的底层协议，如同http2之于gRPC，本项目基于该协议实现了client/server的基础框架。
+
 [![GoDoc](https://godoc.org/github.com/truexf/iip?status.svg)](http://godoc.org/github.com/truexf/iip) 
 ## 使用说明
 * echo回显client示例: [example/echo_client/echo_client.go](https://github.com/truexf/iip/blob/master/example/echo_client/echo_client.go)
@@ -36,9 +39,6 @@ BenchmarkPFEchoClientServer-8   	    7090	   1630507 ns/op	   99443 B/op	      1
 BenchmarkPFEchoNetHttp-8        	   27556	    428245 ns/op	   52198 B/op	      65 allocs/op
 BenchmarkPFIIPBalanceClient-8   	   36670	    305865 ns/op	   84436 B/op	      15 allocs/op
 ```
-
-## IIP是什么？ 
-基于TCP的基础通讯协议及框架(IIP,Internal Interaction Protocol),该协议可作为RPC接口调用的底层协议，如同http2之于gRPC，本项目基于该协议实现了client/server的基础框架。
 
 ## 典型案例 
  ![image](https://github.com/truexf/iip/blob/master/usedby/baixun.png)  
