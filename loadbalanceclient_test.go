@@ -16,7 +16,8 @@ var (
 	pflbcIIPServerAddr = flag.String("lbcaddr", ":9090#1,:9090#1,:9090#1", "")
 )
 
-func BenchmarkPFBalanceClient(b *testing.B) {
+func BenchmarkPFIIPBalanceClient(b *testing.B) {
+	flag.Parse()
 	lbc, err := NewLoadBalanceClient(100, 1000, *pflbcIIPServerAddr)
 	if err != nil {
 		b.Fatalf("new lbc fail,%s", err.Error())
