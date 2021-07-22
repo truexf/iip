@@ -44,7 +44,7 @@ BenchmarkPFIIPBalanceClient-8   	   36670	    305865 ns/op	   84436 B/op	      1
 
 ## 典型案例 
  ![image](https://github.com/truexf/iip/blob/master/usedby/baixun.png)  
-[百寻广告流量交易平台](https://github.com/truexf/iip/blob/master/example/echo_client/echo_client.go)日处理数十亿次广告流量请求,峰值qps 4w+, 采用iip承载其内部核心交易系统的微服务。
+[百寻广告流量交易平台](https://www.bxadsite.com/)日处理数十亿次广告流量请求,峰值qps 4w+, 采用iip承载其内部核心交易系统的微服务。
 
 ## 为什么开发IIP？从http1.1说起
 
