@@ -168,11 +168,16 @@ func (m *Client) newChannel(conn *Connection) (*ClientChannel, error) {
 
 func (m *Client) dialTLS() (net.Conn, error) {
 	log.Logf("dail tls")
-	cert, err := tls.LoadX509KeyPair(m.tlsCertFile, m.tlsKeyFile)
-	if err != nil {
-		return nil, err
+	var cert tls.Certificate
+	var err error
+	config := tls.Config{Certificates: []tls.Certificate{}, InsecureSkipVerify: true}
+	if m.tlsCertFile != "" && m.tlsKeyFile != "" {
+		cert, err = tls.LoadX509KeyPair(m.tlsCertFile, m.tlsKeyFile)
+		if err != nil {
+			return nil, err
+		}
+		config.Certificates = append(config.Certificates, cert)
 	}
-	config := tls.Config{Certificates: []tls.Certificate{cert}, InsecureSkipVerify: true}
 	conn, err := tls.Dial("tcp4", m.serverAddr, &config)
 	if err != nil {
 		return nil, err

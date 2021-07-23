@@ -27,6 +27,7 @@ func (m *EchoClientHandler) Handle(path string, request iip.Request, responseDat
 var (
 	certFileClient = flag.String("cert", "", "echo_client -cert certFile -key keyFile")
 	keyFileClient  = flag.String("key", "", "echo_client -cert certFile -key keyFile")
+	tls            = flag.String("tls", "0", "-tls=1")
 )
 
 func main() {
@@ -50,6 +51,23 @@ func main() {
 			nil,
 			*certFileClient,
 			*keyFileClient,
+		)
+	} else if *tls != "0" {
+		fmt.Println("new tls client")
+		client, err = iip.NewClientTLS(
+			iip.ClientConfig{
+				MaxConnections:        1000,
+				MaxChannelsPerConn:    10,
+				ChannelPacketQueueLen: 1000,
+				TcpWriteQueueLen:      1000,
+				TcpReadBufferSize:     16 * 1024,
+				TcpWriteBufferSize:    16 * 1024,
+				TcpConnectTimeout:     time.Second * 3,
+			},
+			":9090",
+			nil,
+			"",
+			"",
 		)
 	} else {
 		client, err = iip.NewClient(
