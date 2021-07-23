@@ -2,8 +2,9 @@
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
-// IQ is an IIP client tool that makes requests to the IIP Server and outputs responses, just as Curl is an HTTP client
 package main
+
+// IQ is an IIP client tool that makes requests to the IIP Server and outputs responses, just as Curl is an HTTP client
 
 import (
 	"flag"
@@ -43,8 +44,8 @@ OPTION list:
 }
 
 func init() {
-	flag.Parse()
 	flag.Usage = usage
+	flag.Parse()
 }
 func main() {
 	flag.Parse()
