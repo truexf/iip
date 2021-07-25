@@ -579,13 +579,23 @@ func (m *Connection) Close(err error) {
 		}
 	}
 
-	m.tcpConn.Close()
 	for _, v := range m.Channels {
 		v.Close(fmt.Errorf("connection is closed"))
 	}
 	if m.closeNotify != nil {
 		close(m.closeNotify)
 		m.closeNotify = nil
+	}
+
+	m.tcpConn.Close()
+
+	//clean write chan
+	for {
+		select {
+		case <-m.tcpWriteQueue:
+		default:
+			return
+		}
 	}
 }
 
