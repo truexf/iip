@@ -400,6 +400,7 @@ func (m *EvaluatedClient) getTaskChannel() (*ClientChannel, error) {
 			return nil, fmt.Errorf("connect to %s fail, %s", m.client.serverAddr, err.Error())
 		} else {
 			if c, err := m.client.newChannel(conn); err != nil {
+				m.client.removeConnection(conn)
 				return nil, fmt.Errorf("new channel to %s fail, %s", m.client.serverAddr, err.Error())
 			} else {
 				conn.SetCtxData(CtxLblClientChannel, c)
@@ -407,8 +408,11 @@ func (m *EvaluatedClient) getTaskChannel() (*ClientChannel, error) {
 			}
 		}
 	} else {
-		//Channels[0]是默认建立的sys channel,每个lbl connection只额外建立一个channel[1]
-		return m.client.connections[m.connIndex].GetCtxData(CtxLblClientChannel).(*ClientChannel), nil
+		ret := m.client.connections[m.connIndex].GetCtxData(CtxLblClientChannel)
+		if ret == nil {
+			return nil, fmt.Errorf("connection have no lbl-client-channel")
+		}
+		return ret.(*ClientChannel), nil
 
 	}
 }
