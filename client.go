@@ -292,21 +292,26 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 	if len(pkt.Data) == 0 {
 		return nil, fmt.Errorf("request.Data() is nil")
 	}
+
 	respChan := acquireNotifyChan() //make(chan []byte)
 	request.SetCtxData(CtxResponseChan, respChan)
-	m.sendRequestLock.Lock()
-	if err := m.internalChannel.SendPacket(pkt); err != nil {
-		m.sendRequestLock.Unlock()
-		return nil, err
-	} else {
-		m.uncompletedRequestQueue.PushTail(request, true)
-		m.sendRequestLock.Unlock()
-	}
-
 	defer func() {
 		request.RemoveCtxData(CtxResponseChan)
 		releaseNotifyChan(respChan)
 	}()
+
+	if err := func() error {
+		m.sendRequestLock.Lock()
+		defer m.sendRequestLock.Unlock()
+		if err := m.internalChannel.SendPacket(pkt); err != nil {
+			return err
+		} else {
+			m.uncompletedRequestQueue.PushTail(request, true)
+		}
+		return nil
+	}(); err != nil {
+		return nil, err
+	}
 
 	if timeout > 0 {
 		select {
