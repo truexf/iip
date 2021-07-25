@@ -401,10 +401,7 @@ func (m *EvaluatedClient) getTaskChannel() (*ClientChannel, error) {
 	if m.client == nil {
 		return nil, fmt.Errorf("not init yet")
 	}
-	m.connIndex++
-	if m.connIndex >= int(m.client.connCount) {
-		m.connIndex = 0
-	}
+
 	if m.client.connCount < int32(m.blc.serverKeepConns) {
 		if conn, err := m.client.newConnection(); err != nil {
 			return nil, fmt.Errorf("connect to %s fail, %s", m.client.serverAddr, err.Error())
@@ -418,6 +415,12 @@ func (m *EvaluatedClient) getTaskChannel() (*ClientChannel, error) {
 			}
 		}
 	} else {
+		m.client.connLock.RLock()
+		defer m.client.connLock.RUnlock()
+		m.connIndex++
+		if m.connIndex >= int(m.client.connCount) {
+			m.connIndex = 0
+		}
 		ret := m.client.connections[m.connIndex].GetCtxData(CtxLblClientChannel)
 		if ret == nil {
 			return nil, fmt.Errorf("connection have no lbl-client-channel")
