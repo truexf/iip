@@ -6,7 +6,11 @@ package iip
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -18,34 +22,35 @@ func (m *EchoClientHandlerTest) Handle(path string, request Request, responseDat
 	return nil
 }
 
+var (
+	pfNetHttpServerAddr = flag.String("naddr", ":9091", "")
+	pfIIPServerAddr     = flag.String("iipaddr", ":9090", "")
+)
+
 //跑这个测试前须先在9090端口启动echo_server, echo_server在example/echo_server/echo_server.go
-func BenchmarkEchoClientServer(t *testing.B) {
+func BenchmarkPFEchoClientServer(t *testing.B) {
+	flag.Parse()
 	LogClosing = false
-	for i := 0; i < t.N; i++ {
-		//同时3个并发，测试channel是否在并发情况下是否有串扰
-		c := make(chan error, 3)
-		for j := 0; j < 3; j++ {
-			go func() {
-				client, err := NewClient(ClientConfig{
-					MaxConnections:        1000,
-					MaxChannelsPerConn:    10,
-					ChannelPacketQueueLen: 1000,
-					TcpWriteQueueLen:      1000,
-					TcpReadBufferSize:     16 * 1024,
-					TcpWriteBufferSize:    16 * 1024,
-					TcpConnectTimeout:     time.Second * 3,
-				}, ":9090", nil)
-				if err != nil {
-					c <- fmt.Errorf("connect server fail")
-					return
-				}
-				client.RegisterHandler("/echo_benchmark", &EchoClientHandlerTest{})
-				channel, err := client.NewChannel()
-				if err != nil {
-					c <- fmt.Errorf("new channel fail, %s", err.Error())
-					return
-				}
-				echoData := []byte(`1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+	client, err := NewClient(ClientConfig{
+		MaxConnections:        1000,
+		MaxChannelsPerConn:    10,
+		ChannelPacketQueueLen: 1000,
+		TcpWriteQueueLen:      1000,
+		TcpReadBufferSize:     16 * 1024,
+		TcpWriteBufferSize:    16 * 1024,
+		TcpConnectTimeout:     time.Second * 3,
+	}, *pfIIPServerAddr, nil)
+	if err != nil {
+		t.Fatalf("connect server fail")
+		return
+	}
+	client.RegisterHandler("/echo_benchmark", &EchoClientHandlerTest{})
+	channel, err := client.NewChannel()
+	if err != nil {
+		t.Fatalf("new channel fail, %s", err.Error())
+		return
+	}
+	echoData := `1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
@@ -56,28 +61,48 @@ func BenchmarkEchoClientServer(t *testing.B) {
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
 					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
-					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest` + fmt.Sprintf("%d", time.Now().UnixNano()))
-				for x := 0; x < 3; x++ {
-					bts, err := channel.DoRequest("/echo_benchmark", NewDefaultRequest(echoData), time.Second)
-					if err != nil {
-						c <- fmt.Errorf(err.Error())
-						return
-					}
-					if !bytes.Equal(bts, echoData) {
-						c <- fmt.Errorf("response not same as request")
-						return
-					}
-				}
-				channel.Close(nil)
-				client.Close()
-				c <- nil
-			}()
-		}
-		for j := 0; j < 3; j++ {
-			err := <-c
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest` + fmt.Sprintf("%d", time.Now().UnixNano())
+	echoData = strings.Repeat(echoData, 10)
+	t.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			bts, err := channel.DoRequest("/echo_benchmark", NewDefaultRequest([]byte(echoData)), time.Second)
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
+			if !bytes.Equal(bts, []byte(echoData)) {
+				t.Fatalf("response not same as request")
+			}
 		}
-	}
+	})
+}
+
+func BenchmarkPFEchoNetHttp(t *testing.B) {
+	flag.Parse()
+	LogClosing = false
+	echoData := `1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest` + fmt.Sprintf("%d", time.Now().UnixNano())
+	echoData = strings.Repeat(echoData, 10)
+	t.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			resp, err := http.Post(fmt.Sprintf("http://%s/echo_benchmark", *pfNetHttpServerAddr), "application/octet-stream", bytes.NewReader([]byte(echoData)))
+			if err != nil {
+				t.Fatalf(err.Error())
+			}
+			if bts, err := ioutil.ReadAll(resp.Body); err == nil {
+				if !bytes.Equal(bts, bts) {
+					t.Fatalf("response not same as request")
+				}
+			}
+		}
+	})
 }

@@ -1,3 +1,6 @@
+## IIP是什么？ 
+基于TCP的基础通讯协议及框架(IIP,Internal Interaction Protocol),该协议可作为RPC接口调用的底层协议，如同http2之于gRPC，本项目基于该协议实现了client/server的基础框架。
+
 [![GoDoc](https://godoc.org/github.com/truexf/iip?status.svg)](http://godoc.org/github.com/truexf/iip) 
 ## 使用说明
 * echo回显client示例: [example/echo_client/echo_client.go](https://github.com/truexf/iip/blob/master/example/echo_client/echo_client.go)
@@ -8,8 +11,38 @@
 * 文件上传server示例(支持断点续传): [example/upload_server/upload_server.go](https://github.com/truexf/iip/blob/master/example/upload_server/upload_server.go)
 * load-balance-client高并发请求示例: [loadbalanceclient_test.go](https://github.com/truexf/iip/blob/master/loadbalanceclient_test.go)
 
-## IIP是什么？ 
-基于TCP的基础通讯协议及框架(IIP,Internal Interaction Protocol),该协议可作为RPC接口调用的底层协议，如同http2之于gRPC，本项目基于该协议实现了client/server的基础框架。
+## benchmark对比测试
+* BenchmarkPFEchoClientServer: 普通iip client单个channel
+* BenchmarkPFEchoNetHttp：标准库 net/http 
+* BenchmarkPFIIPBalanceClient：iip load balance client  
+* 运行benchmark前需要先编译运行启动server端，server代码在example/echo_server/  编译：$ go build ./echo_server.go  启动: $ ./echo_server
+* 单核：
+```
+$ GOMAXPROCS=1 go test -bench=. -naddr="192.168.2.98:9091" -lbcaddr="192.168.2.98:9090#2" -iipaddr="192.168.2.98:9090" -run="PF.*" -benchmem -benchtime=10s
+BenchmarkPFEchoClientServer 	    5418	   1944837 ns/op	   99428 B/op	      16 allocs/op
+BenchmarkPFEchoNetHttp      	    3510	   3342903 ns/op	   51476 B/op	      64 allocs/op
+BenchmarkPFIIPBalanceClient 	    6043	   1942451 ns/op	   92033 B/op	      16 allocs/op
+```
+
+* 四核:
+```
+$ GOMAXPROCS=4 go test -bench=. -naddr="192.168.2.98:9091" -lbcaddr="192.168.2.98:9090#2" -iipaddr="192.168.2.98:9090" -run="PF.*" -benchmem -benchtime=10s
+BenchmarkPFEchoClientServer-4   	    7243	   1589468 ns/op	   99418 B/op	      16 allocs/op
+BenchmarkPFEchoNetHttp-4        	   13854	    868070 ns/op	   51576 B/op	      64 allocs/op
+BenchmarkPFIIPBalanceClient-4   	   19844	    590167 ns/op	   85720 B/op	      15 allocs/op
+```
+
+* 八核:
+```
+$ GOMAXPROCS=8 go test -bench=. -naddr="192.168.2.98:9091" -lbcaddr="192.168.2.98:9090#2" -iipaddr="192.168.2.98:9090" -run="PF.*" -benchmem -benchtime=10s
+BenchmarkPFEchoClientServer-8   	    7090	   1630507 ns/op	   99443 B/op	      16 allocs/op
+BenchmarkPFEchoNetHttp-8        	   27556	    428245 ns/op	   52198 B/op	      65 allocs/op
+BenchmarkPFIIPBalanceClient-8   	   36670	    305865 ns/op	   84436 B/op	      15 allocs/op
+```
+
+## 典型案例 
+ ![image](https://github.com/truexf/iip/blob/master/usedby/baixun.png)  
+[百寻广告流量交易平台](https://www.bxadsite.com/)日处理数十亿次广告流量请求,峰值qps 4w+, 采用iip承载其内部核心交易系统的微服务。
 
 ## IIP架构 
  ![image](https://github.com/truexf/iip/blob/master/iip.jpg)
