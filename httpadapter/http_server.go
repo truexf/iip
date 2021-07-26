@@ -54,6 +54,7 @@ func NewHttpAdapterServer(listenAddr string, tlsCertFile, tlsKeyFile string, req
 	return ret, nil
 }
 
+// 注册backend(iip server), alias必须唯一，config指定一组iip server及相关参数
 func (m *HttpAdapterServer) RegisterBackend(alias string, config IipBackendConfig) error {
 	m.backendLock.Lock()
 	defer m.backendLock.Unlock()
@@ -69,6 +70,7 @@ func (m *HttpAdapterServer) RegisterBackend(alias string, config IipBackendConfi
 	return nil
 }
 
+// 移除backend
 func (m *HttpAdapterServer) RemoveBackend(alias string) {
 	m.backendLock.Lock()
 	defer m.backendLock.Unlock()
@@ -85,6 +87,7 @@ func (m *HttpAdapterServer) getBackend(alias string) *iip.LoadBalanceClient {
 	return nil
 }
 
+// 注册一个路由（相当于nginx的location）,根据正则表达式的匹配决定是用哪组backend
 func (m *HttpAdapterServer) PushRouteTail(host string, regExp string, backendAlias string) error {
 	if host == "" {
 		return fmt.Errorf("empty host")
@@ -111,6 +114,7 @@ func (m *HttpAdapterServer) PushRouteTail(host string, regExp string, backendAli
 	return nil
 }
 
+// 头部添加路由，路由的选择从头到尾进行，先匹配到的先得， 因此分别提供了头部注册和尾部注册，方便开发者决定优先级
 func (m *HttpAdapterServer) PushRouteHead(host string, regExp string, backendAlias string) error {
 	if host == "" {
 		return fmt.Errorf("empty host")
@@ -138,6 +142,7 @@ func (m *HttpAdapterServer) PushRouteHead(host string, regExp string, backendAli
 	return nil
 }
 
+// 移除路由
 func (m *HttpAdapterServer) RemoveRoute(host, regExp string) {
 	m.routeLock.Lock()
 	defer m.routeLock.Unlock()
