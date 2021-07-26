@@ -1,0 +1,238 @@
+// Copyright 2021 fangyousong(方友松). All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
+package httpadapter
+
+import (
+	"fmt"
+	"io/ioutil"
+	"net"
+	"net/http"
+	"os"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/truexf/iip"
+)
+
+type IipBackendConfig struct {
+	ServerList      string //ip:port#weight(1~100),ip:port#weight,...
+	ServerKeepConns int
+	ServerMaxConns  int
+}
+
+type RegExpRoute struct {
+	RegExpStr    string
+	expr         *regexp.Regexp
+	BackendAlias string
+}
+
+/*
+  http client(browser,...) <==> HttpAdapterServer <==> iip server(s)
+  HttpServer作为一组iip server的反向代理，接收来自客户端的http请求，并转换为iip协议，转发给后端的iip server，接收iip server的响应，
+  将iip server的响应转换为http响应，并返回给客户端
+*/
+type HttpAdapterServer struct {
+	httpServer     *http.Server
+	addr           string
+	tlsCertFile    string
+	tlsKeyFile     string
+	requestTimeout time.Duration
+	backends       map[string]*iip.LoadBalanceClient
+	backendLock    sync.RWMutex
+	routes         map[string][]RegExpRoute
+	routeLock      sync.RWMutex
+}
+
+func NewHttpAdapterServer(listenAddr string, tlsCertFile, tlsKeyFile string, requestTimeout time.Duration) (*HttpAdapterServer, error) {
+	ret := &HttpAdapterServer{addr: listenAddr, tlsCertFile: tlsCertFile, tlsKeyFile: tlsKeyFile, requestTimeout: requestTimeout}
+	ret.backends = make(map[string]*iip.LoadBalanceClient)
+	ret.routes = make(map[string][]RegExpRoute)
+	return ret, nil
+}
+
+func (m *HttpAdapterServer) RegisterBackend(alias string, config IipBackendConfig) error {
+	m.backendLock.Lock()
+	defer m.backendLock.Unlock()
+	if _, ok := m.backends[alias]; ok {
+		return fmt.Errorf("alias %s exists", alias)
+	}
+	lbc, err := iip.NewLoadBalanceClient(config.ServerKeepConns, config.ServerMaxConns, config.ServerList)
+	if err != nil {
+		return err
+	}
+	m.backends[alias] = lbc
+
+	return nil
+}
+
+func (m *HttpAdapterServer) RemoveBackend(alias string) {
+	m.backendLock.Lock()
+	defer m.backendLock.Unlock()
+	delete(m.backends, alias)
+}
+
+func (m *HttpAdapterServer) getBackend(alias string) *iip.LoadBalanceClient {
+	m.backendLock.RLock()
+	defer m.backendLock.RUnlock()
+	ret, ok := m.backends[alias]
+	if ok {
+		return ret
+	}
+	return nil
+}
+
+func (m *HttpAdapterServer) PushRouteTail(host string, regExp string, backendAlias string) error {
+	if host == "" {
+		return fmt.Errorf("empty host")
+	}
+	if regExp == "" {
+		return fmt.Errorf("empty regexp")
+	}
+	if backendAlias == "" {
+		return fmt.Errorf("empty alias")
+	}
+	exp, err := regexp.Compile(regExp)
+	if err != nil {
+		return err
+	}
+	m.routeLock.Lock()
+	defer m.routeLock.Unlock()
+	hostRoutes, ok := m.routes[host]
+	if !ok {
+		hostRoutes = make([]RegExpRoute, 0)
+	}
+	hostRoutes = append(hostRoutes, RegExpRoute{RegExpStr: regExp, expr: exp, BackendAlias: backendAlias})
+	m.routes[host] = hostRoutes
+
+	return nil
+}
+
+func (m *HttpAdapterServer) PushRouteHead(host string, regExp string, backendAlias string) error {
+	if host == "" {
+		return fmt.Errorf("empty host")
+	}
+	if regExp == "" {
+		return fmt.Errorf("empty regexp")
+	}
+	if backendAlias == "" {
+		return fmt.Errorf("empty alias")
+	}
+	exp, err := regexp.Compile(regExp)
+	if err != nil {
+		return err
+	}
+	m.routeLock.Lock()
+	defer m.routeLock.Unlock()
+	hostRoutes, ok := m.routes[host]
+	if !ok {
+		hostRoutes = make([]RegExpRoute, 0)
+	}
+	var ret []RegExpRoute
+	ret = append(ret, RegExpRoute{RegExpStr: regExp, expr: exp, BackendAlias: backendAlias})
+	ret = append(ret, hostRoutes...)
+	m.routes[host] = ret
+	return nil
+}
+
+func (m *HttpAdapterServer) RemoveRoute(host, regExp string) {
+	m.routeLock.Lock()
+	defer m.routeLock.Unlock()
+	hostRoute, ok := m.routes[host]
+	if !ok {
+		return
+	}
+	for {
+		found := false
+		for i, v := range hostRoute {
+			if v.RegExpStr == regExp {
+				ret := hostRoute[:i]
+				if i < len(m.routes)-1 {
+					ret = append(ret, hostRoute[i+1:]...)
+				}
+				m.routes[host] = ret
+				found = true
+				break
+			}
+		}
+		if !found {
+			break
+		}
+	}
+}
+
+func (m *HttpAdapterServer) findRoute(host string, uri string) string {
+	m.routeLock.RLock()
+	defer m.routeLock.RUnlock()
+	hostRoute, ok := m.routes[host]
+	if !ok {
+		return ""
+	}
+	//第一次完全匹配
+	for _, v := range hostRoute {
+		if v.expr.FindString(uri) == uri {
+			return v.BackendAlias
+		}
+	}
+
+	//第二次部分匹配
+	for _, v := range hostRoute {
+		if v.expr.MatchString(uri) {
+			return v.BackendAlias
+		}
+	}
+
+	return ""
+}
+
+func (m *HttpAdapterServer) findBackendFromRegexpRoute(host, uri string) *iip.LoadBalanceClient {
+	alias := m.findRoute(host, uri)
+	if alias != "" {
+		return m.getBackend(alias)
+	}
+	return nil
+}
+
+func (m *HttpAdapterServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	hostSeg := strings.Split(req.Host, ":")
+	backend := m.findBackendFromRegexpRoute(hostSeg[0], req.RequestURI)
+	if backend == nil {
+		os.Stdout.WriteString("route not found\n")
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+	bts, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if ret, err := backend.DoRequest(req.RequestURI, iip.NewDefaultRequest(bts), m.requestTimeout); err != nil {
+		iip.GetLogger().Errorf("error %s , when call backend of path: %s", err.Error(), req.RequestURI)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	} else {
+		w.WriteHeader(http.StatusOK)
+		w.Write(ret)
+	}
+}
+
+func (m *HttpAdapterServer) Serve(lsn net.Listener) error {
+	m.httpServer = &http.Server{Addr: m.addr, Handler: m}
+	if m.tlsCertFile != "" && m.tlsKeyFile != "" {
+		return m.httpServer.ServeTLS(lsn, m.tlsCertFile, m.tlsKeyFile)
+	} else {
+		return m.httpServer.Serve(lsn)
+	}
+}
+
+func (m *HttpAdapterServer) ListenAndServe() error {
+	m.httpServer = &http.Server{Addr: m.addr, Handler: m}
+	if m.tlsCertFile != "" && m.tlsKeyFile != "" {
+		return m.httpServer.ListenAndServeTLS(m.tlsCertFile, m.tlsKeyFile)
+	} else {
+		return m.httpServer.ListenAndServe()
+	}
+}
