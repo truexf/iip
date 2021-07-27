@@ -35,6 +35,7 @@ func main() {
 	var client *iip.Client
 	var err error
 	flag.Parse()
+	//1. 创建Client
 	if *certFileClient != "" && *keyFileClient != "" {
 		fmt.Printf("certfile: %s, keyfile: %s\n", *certFileClient, *keyFileClient)
 		client, err = iip.NewClientTLS(
@@ -90,6 +91,8 @@ func main() {
 	}
 	// 这里并非必要，只是展示Handler作为一个响应回调处理的功能，client handler一般一般用于流式(分段)响应的应用场景，见Client.DoStreamRequest
 	client.RegisterHandler("/echo", &EchoClientHandler{})
+
+	// 2.创建channel
 	channel, err := client.NewChannel()
 	if err != nil {
 		fmt.Printf("new channel fail, %s\n", err.Error())
@@ -97,7 +100,9 @@ func main() {
 	}
 	fmt.Println("input some words:")
 	lineReader := bufio.NewScanner(os.Stdin)
+	// 循环接收控制台的输入，并将其发送给server,并接收server的响应并输出到控制台
 	for {
+
 		if !lineReader.Scan() {
 			break
 		}
