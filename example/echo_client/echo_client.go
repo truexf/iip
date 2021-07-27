@@ -88,6 +88,7 @@ func main() {
 		fmt.Printf("new client fail, %s\n", err.Error())
 		return
 	}
+	// 这里并非必要，只是展示Handler作为一个响应回调处理的功能，client handler一般一般用于流式(分段)响应的应用场景，见Client.DoStreamRequest
 	client.RegisterHandler("/echo", &EchoClientHandler{})
 	channel, err := client.NewChannel()
 	if err != nil {
