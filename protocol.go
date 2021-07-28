@@ -577,7 +577,7 @@ func (m *Connection) Close(err error) {
 	} else {
 		m.err = fmt.Errorf("unknown")
 	}
-	if LogClosing {
+	if LogClosing && m.tcpConn != nil {
 		log.Errorf("connection closed, role %d, remote addr: %s, error: %s", m.Role, m.tcpConn.RemoteAddr().String(), m.err.Error())
 	}
 
