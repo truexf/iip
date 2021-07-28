@@ -226,6 +226,17 @@ func (m *Channel) SendPacket(pkt *Packet) error {
 		return nil
 	}
 
+	if m.conn.Role == RoleClient {
+		//after send request, set waiting for response timeout
+		defer func() {
+			readTimeout := m.conn.Client.config.TcpConnectTimeout
+			if readTimeout <= 0 {
+				readTimeout = time.Second * 5
+			}
+			m.conn.tcpConn.SetReadDeadline(time.Now().Add(readTimeout))
+		}()
+	}
+
 	if len(pkt.Data) <= int(MaxPacketSize) || pkt.DontChunk {
 		if m.conn.Role == RoleClient {
 			pkt.Status = 1
@@ -545,6 +556,7 @@ func (m *Connection) writeLoop() {
 	for {
 		select {
 		case pkt := <-m.tcpWriteQueue:
+			m.tcpConn.SetWriteDeadline(time.Now().Add(time.Second * 3))
 			if _, err := WritePacket(pkt, m.tcpConn); err != nil {
 				m.Close(err)
 				return
@@ -587,7 +599,10 @@ func (m *Connection) Close(err error) {
 		m.closeNotify = nil
 	}
 
-	m.tcpConn.Close()
+	if m.tcpConn != nil {
+		m.tcpConn.Close()
+		m.tcpConn = nil
+	}
 
 	//clean write chan
 	for {

@@ -59,6 +59,25 @@ func NewServer(config ServerConfig, listenAddr string, timeCountRangeFunc Ensure
 		pathMeasure: make(map[string]*Measure),
 	}
 
+	if ret.config.ChannelPacketQueueLen <= 0 {
+		ret.config.ChannelPacketQueueLen = 100
+	}
+	if ret.config.MaxChannelsPerConn <= 0 {
+		ret.config.MaxChannelsPerConn = 10
+	}
+	if ret.config.MaxConnections <= 0 {
+		ret.config.MaxConnections = 1000
+	}
+	if ret.config.TcpWriteBufferSize <= 0 {
+		ret.config.TcpWriteBufferSize = 16 * 1024
+	}
+	if ret.config.TcpReadBufferSize <= 0 {
+		ret.config.TcpReadBufferSize = 16 * 1024
+	}
+	if ret.config.TcpWriteQueueLen <= 0 {
+		ret.config.TcpWriteQueueLen = 100
+	}
+
 	ret.RegisterHandler(PathServerCountJson, ret, EnsureTimeRangeMicroSecond)
 	ret.RegisterHandler(PathServerMeasureJson, ret, EnsureTimeRangeMicroSecond)
 	ret.RegisterHandler(PathServerPathCountJson, ret, EnsureTimeRangeMicroSecond)

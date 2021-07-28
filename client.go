@@ -27,6 +27,7 @@ type ClientConfig struct {
 	TcpConnectTimeout     time.Duration //服务器连接超时限制
 	TcpReadBufferSize     int           //内核socket读缓冲区大小
 	TcpWriteBufferSize    int           //内核socket写缓冲区大小
+	WaitResponseTimeout   time.Duration
 }
 
 type Client struct {
@@ -97,6 +98,30 @@ func NewClient(config ClientConfig, serverAddr string, timeCountRangeFunc Ensure
 		Count:       &Count{},
 		Measure:     NewMesure(timeCountRangeFunc),
 	}
+	if ret.config.ChannelPacketQueueLen <= 0 {
+		ret.config.ChannelPacketQueueLen = 100
+	}
+	if ret.config.MaxChannelsPerConn <= 0 {
+		ret.config.MaxChannelsPerConn = 10
+	}
+	if ret.config.MaxConnections <= 0 {
+		ret.config.MaxConnections = 1000
+	}
+	if ret.config.TcpConnectTimeout <= 0 {
+		ret.config.TcpConnectTimeout = time.Second * 3
+	}
+	if ret.config.TcpWriteBufferSize <= 0 {
+		ret.config.TcpWriteBufferSize = 16 * 1024
+	}
+	if ret.config.TcpReadBufferSize <= 0 {
+		ret.config.TcpReadBufferSize = 16 * 1024
+	}
+	if ret.config.TcpWriteQueueLen <= 0 {
+		ret.config.TcpWriteQueueLen = 100
+	}
+	if ret.config.WaitResponseTimeout <= 0 {
+		ret.config.WaitResponseTimeout = time.Second * 5
+	}
 	ret.config.MaxChannelsPerConn += 1 //channel 0 is internal required
 	return ret, nil
 }
@@ -166,7 +191,7 @@ func (m *Client) newChannel(conn *Connection) (*ClientChannel, error) {
 	}
 }
 
-func (m *Client) dialTLS() (net.Conn, error) {
+func (m *Client) dialTLS(timeout time.Duration) (net.Conn, error) {
 	log.Logf("dail tls")
 	var cert tls.Certificate
 	var err error
@@ -178,7 +203,7 @@ func (m *Client) dialTLS() (net.Conn, error) {
 		}
 		config.Certificates = append(config.Certificates, cert)
 	}
-	conn, err := tls.Dial("tcp4", m.serverAddr, &config)
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: timeout}, "tcp4", m.serverAddr, &config)
 	if err != nil {
 		return nil, err
 	}
@@ -195,10 +220,14 @@ func (m *Client) newConnection() (*Connection, error) {
 
 	var conn net.Conn
 	var err error
+	dialTimeout := m.config.TcpConnectTimeout
+	if dialTimeout <= 0 {
+		dialTimeout = time.Second * 3
+	}
 	if !m.isTls {
-		conn, err = net.DialTimeout("tcp4", m.serverAddr, m.config.TcpConnectTimeout)
+		conn, err = net.DialTimeout("tcp4", m.serverAddr, dialTimeout)
 	} else {
-		conn, err = m.dialTLS()
+		conn, err = m.dialTLS(dialTimeout)
 	}
 	if err != nil {
 		return nil, err
@@ -206,6 +235,7 @@ func (m *Client) newConnection() (*Connection, error) {
 	// tcpConn := conn.(*net.TCPConn)
 	ret, err := NewConnection(m, nil, conn, RoleClient, int(m.config.TcpWriteQueueLen))
 	if err != nil {
+		conn.Close()
 		return nil, err
 	}
 	ret.SetCtxData(CtxClient, m)
@@ -236,6 +266,7 @@ func (m *Client) removeConnection(conn *Connection) {
 				conns = append(conns, m.connections[i+1:]...)
 			}
 			m.connections = conns
+			conn.Close(fmt.Errorf("from Client.removeConnection"))
 			return
 		}
 	}
@@ -313,21 +344,19 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 		return nil, err
 	}
 
-	if timeout > 0 {
-		select {
-		case <-time.After(timeout):
-			return nil, ErrRequestTimeout
-		case resp := <-respChan:
-			if resp != nil {
-				return resp, nil
-			}
-		}
-	} else {
-		resp := <-respChan
+	if timeout <= 0 {
+		timeout = time.Second * 10
+	}
+
+	select {
+	case <-time.After(timeout):
+		return nil, ErrRequestTimeout
+	case resp := <-respChan:
 		if resp != nil {
 			return resp, nil
 		}
 	}
+
 	return nil, ErrUnknown
 }
 
