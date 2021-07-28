@@ -12,8 +12,16 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
 
 	"github.com/truexf/iip"
+	"github.com/truexf/iip/httpadapter"
 )
 
 type EchoServerHandler struct {
@@ -40,8 +48,26 @@ var (
 )
 
 func main() {
+	//became a daemon process
+	if err := daemonize(); err != nil {
+		os.Stdout.WriteString(err.Error() + "\n")
+		return
+	}
+
+	//ignore SIGHUP
+	cSignal := make(chan os.Signal, 1)
+	signal.Notify(cSignal, syscall.SIGHUP)
+	go func() {
+		for {
+			<-cSignal
+		}
+	}()
+
+	//start net/http server	for benchmark comparison
 	go startNetHttpServer()
-	fmt.Println("start listen at :9090")
+	//start http reverse proxy, so you can query iip server as a http server,use client tool by curl,etc
+	go startAdapterServer()
+	// start iip server
 	server, err := iip.NewServer(iip.ServerConfig{
 		MaxConnections:        10000,
 		MaxChannelsPerConn:    10,
@@ -68,14 +94,14 @@ func main() {
 	}
 	if err != nil {
 		fmt.Println(err.Error())
+		return
 	}
-	fmt.Printf("%s server started success.\n", tp)
+	fmt.Printf("start listen %s iip server at :9090\n", tp)
 	c := make(chan int)
 	<-c
 }
 
 func startNetHttpServer() {
-	fmt.Println("start listen at :9091")
 	echoHandler := func(w http.ResponseWriter, req *http.Request) {
 		if bts, err := ioutil.ReadAll(req.Body); err == nil {
 			w.Write(bts)
@@ -84,10 +110,64 @@ func startNetHttpServer() {
 		}
 
 	}
-
 	http.HandleFunc("/echo_benchmark", echoHandler)
 	log.Fatal(http.ListenAndServe(":9091", nil))
-	fmt.Println("net/http server started success.")
-	c := make(chan int)
-	<-c
+}
+
+func startAdapterServer() {
+	adapterServer, err := httpadapter.NewHttpAdapterServer(":9092", "", "", time.Second)
+	if err != nil {
+		return
+	}
+	if err := adapterServer.RegisterBackend("echo_server", httpadapter.IipBackendConfig{ServerList: ":9090#1,:9090#1", ServerKeepConns: 10, ServerMaxConns: 10}); err != nil {
+		return
+	}
+	if err := adapterServer.PushRouteTail("localhost", "^/echo", "echo_server"); err != nil {
+		return
+	}
+	if err := adapterServer.ListenAndServe(); err != nil {
+		return
+	}
+}
+
+func daemonize() error {
+	envs := os.Environ()
+	for _, v := range envs {
+		kv := strings.Split(v, "=")
+		if len(kv) == 2 && kv[0] == "ppid" {
+			return nil
+		}
+	}
+	exePath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	exePath, _ = filepath.EvalSymlinks(exePath)
+	//daemonize
+	envs = os.Environ()
+	envs = append(envs, fmt.Sprintf("ppid=%d", os.Getpid()))
+	workDir, _ := os.Getwd()
+	_, err = os.StartProcess(exePath, os.Args, &os.ProcAttr{Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
+		Dir: workDir,
+		Env: envs,
+		// Sys: &syscall.SysProcAttr{Setsid: true, Noctty: true},
+	})
+	if err != nil {
+		return err
+	}
+	envs = os.Environ()
+	envPpid := -100
+	for _, v := range envs {
+		kv := strings.Split(v, "=")
+		if len(kv) == 2 && kv[0] == "ppid" {
+			envPpid, _ = strconv.Atoi(kv[1])
+			break
+		}
+	}
+	if envPpid == -100 {
+		//parent process
+		os.Exit(0)
+	}
+
+	return nil
 }
