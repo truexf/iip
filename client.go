@@ -471,6 +471,7 @@ func (m *EvaluatedClient) DoRequest(path string, request Request, timeout time.D
 	if ret, err := channel.DoRequest(path, request, timeout); err == nil {
 		return ret, err
 	} else {
+		channel.internalChannel.conn.Close(fmt.Errorf("client do request timeout"))
 		return ret, fmt.Errorf("request [%s], %s", m.client.serverAddr, err.Error())
 	}
 }
