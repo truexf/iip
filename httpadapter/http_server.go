@@ -214,7 +214,18 @@ func (m *HttpAdapterServer) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if ret, err := backend.DoRequest(req.RequestURI, iip.NewDefaultRequest(bts), m.requestTimeout); err != nil {
+	uri := req.RequestURI
+	if headerArg, err := iip.HttpHeaderToIIPArg(req.Header); err == nil {
+		if req.URL.RawQuery != "" {
+			uri = uri + fmt.Sprintf("&%s=%s", iip.ArgHttpHeader, headerArg)
+		} else {
+			uri = uri + fmt.Sprintf("?%s=%s", iip.ArgHttpHeader, headerArg)
+		}
+	} else {
+		iip.GetLogger().Errorf("httpHeaderToIIPArg fail, %s", err.Error())
+	}
+
+	if ret, err := backend.DoRequest(uri, iip.NewDefaultRequest(bts), m.requestTimeout); err != nil {
 		iip.GetLogger().Errorf("error %s , when call backend of path: %s", err.Error(), req.RequestURI)
 		w.WriteHeader(http.StatusInternalServerError)
 		return

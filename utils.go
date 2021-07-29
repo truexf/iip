@@ -6,6 +6,9 @@
 package iip
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"net/http"
 	"net/url"
 	"sync"
 	"time"
@@ -149,4 +152,25 @@ func releaseNotifyChan(c chan []byte) {
 	default:
 	}
 	responseNotifyChanPool.Put(c)
+}
+
+func HttpHeaderToIIPArg(h http.Header) (string, error) {
+	bts, err := json.Marshal(h)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(bts), nil
+}
+
+func IIPArgToHttpHeader(argValue string) (http.Header, error) {
+	bts, err := base64.URLEncoding.DecodeString(argValue)
+	if err != nil {
+		return nil, err
+	}
+	ret := make(http.Header)
+	if err := json.Unmarshal(bts, &ret); err != nil {
+		return nil, err
+	} else {
+		return ret, nil
+	}
 }
