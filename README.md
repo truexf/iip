@@ -11,6 +11,7 @@
 * 文件上传client示例(支持断点续传): [example/upload_client/upload_client.go](https://github.com/truexf/iip/blob/master/example/upload_client/upload_client.go)
 * 文件上传server示例(支持断点续传): [example/upload_server/upload_server.go](https://github.com/truexf/iip/blob/master/example/upload_server/upload_server.go)
 * load-balance-client高并发请求示例: [loadbalanceclient_test.go](https://github.com/truexf/iip/blob/master/loadbalanceclient_test.go)
+* httpClient<==>httpServer(作为反向代理)<==>iipServer [httpadapter/http_server_test.go](https://github.com/truexf/iip/blob/master/httpadapter/http_server_test.go)
 
 ## benchmark对比测试
 * BenchmarkPFEchoClientServer: 普通iip client单个channel
