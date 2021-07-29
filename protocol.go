@@ -507,6 +507,7 @@ type Connection struct {
 	closeNotify   chan int
 	closeLock     uint32
 	Count         *Count
+	closed        bool
 }
 
 // 创建一个Connection对象，由Client或Server内部调用
@@ -572,6 +573,12 @@ func (m *Connection) Close(err error) {
 		return
 	}
 	defer atomic.StoreUint32(&m.closeLock, 0)
+	if m.closed {
+		return
+	}
+	defer func() {
+		m.closed = true
+	}()
 	if err != nil {
 		m.err = err
 	} else {
