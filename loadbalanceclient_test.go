@@ -17,6 +17,7 @@ var (
 )
 
 func BenchmarkPFIIPBalanceClient(b *testing.B) {
+	LogClosing = false
 	flag.Parse()
 	lbc, err := NewLoadBalanceClient(100, 1000, *pflbcIIPServerAddr)
 	if err != nil {
