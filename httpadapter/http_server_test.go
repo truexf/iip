@@ -10,18 +10,45 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
+	"strings"
 	"testing"
 	"time"
-
-	"github.com/truexf/iip"
 )
 
+func BenchmarkBMHttpAdapter(t *testing.B) {
+	echoData := `1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+					1testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest` + fmt.Sprintf("%d", time.Now().UnixNano())
+	bts := []byte(strings.Repeat(echoData, 10))
+	t.ResetTimer()
+	for i := 0; i < t.N; i++ {
+		resp, err := http.Post("http://localhost:9092/echo", "", bytes.NewReader(bts))
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		ret, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		if !bytes.Equal(bts, ret) {
+			t.Fatalf("request response not equal\n%s\n%s\n", string(bts), string(ret))
+		}
+	}
+}
+
+// start test server first (in main/http_adapter_test_server.go)
 func TestHttpAdapter(t *testing.T) {
-	go startIIPServer()
-	go startAdapterServer()
 	time.Sleep(time.Second * 2)
-	bts := []byte("hello, http adapater\n")
+	bts := []byte(strings.Repeat("hello, http adapater\n", 100))
 	resp, err := http.Post("http://localhost:9092/echo", "", bytes.NewReader(bts))
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -59,65 +86,4 @@ func TestHttpAdapter(t *testing.T) {
 		}
 	}
 
-}
-
-type EchoServerHandler struct {
-}
-
-func (m *EchoServerHandler) Handle(path string, queryParams url.Values, requestData []byte, dataCompleted bool) ([]byte, error) {
-	if path == "/echo" {
-		return requestData, nil
-	} else if path == "/http_header_echo" {
-		hd, err := iip.IIPArgToHttpHeader(queryParams.Get(iip.ArgHttpHeader))
-		if err != nil {
-			return []byte(err.Error()), nil
-		} else {
-			if bts, err := json.Marshal(hd); err == nil {
-				return bts, nil
-			} else {
-				return []byte(err.Error()), nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("path %s not support", path)
-
-}
-func startIIPServer() {
-	server, err := iip.NewServer(iip.ServerConfig{
-		MaxConnections:        10000,
-		MaxChannelsPerConn:    10,
-		ChannelPacketQueueLen: 1000,
-		TcpWriteQueueLen:      1000,
-		TcpReadBufferSize:     16 * 1024,
-		TcpWriteBufferSize:    16 * 1024,
-	}, ":9093", nil)
-
-	if err != nil {
-		panic(err.Error())
-	}
-	echoHandler := &EchoServerHandler{}
-	server.RegisterHandler("/echo", echoHandler, nil)
-	server.RegisterHandler("/http_header_echo", echoHandler, nil)
-	if err := server.StartListen(); err != nil {
-		panic(err.Error())
-	}
-}
-
-func startAdapterServer() {
-	adapterServer, err := NewHttpAdapterServer(":9092", "", "", time.Second)
-	if err != nil {
-		panic(err.Error())
-	}
-	if err := adapterServer.RegisterBackend("echo_server", IipBackendConfig{ServerList: ":9093#1,:9093#1", ServerKeepConns: 10, ServerMaxConns: 10}); err != nil {
-		panic(err.Error())
-	}
-	if err := adapterServer.PushRouteTail("localhost", "^/echo", "echo_server"); err != nil {
-		panic(err.Error())
-	}
-	if err := adapterServer.PushRouteTail("localhost", "^/http_header", "echo_server"); err != nil {
-		panic(err.Error())
-	}
-	if err := adapterServer.ListenAndServe(); err != nil {
-		panic(err.Error())
-	}
 }
