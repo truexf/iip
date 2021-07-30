@@ -128,6 +128,13 @@ func (m *Server) acceptConn() (*Connection, error) {
 			m.connLock.Unlock()
 			continue
 		}
+
+		if !m.isTls {
+			tcpConn := netConn.(*net.TCPConn)
+			tcpConn.SetReadBuffer(m.config.TcpReadBufferSize)
+			tcpConn.SetWriteBuffer(m.config.TcpWriteBufferSize)
+		}
+
 		if conn, err := NewConnection(nil, m, netConn, RoleServer, int(m.config.TcpWriteQueueLen)); err == nil {
 			m.connections[netConn.RemoteAddr().String()] = conn
 			conn.SetCtxData(CtxServer, m)
