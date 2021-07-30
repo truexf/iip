@@ -24,6 +24,9 @@ type IipBackendConfig struct {
 	ServerMaxConns  int
 }
 
+type RouteFunc interface {
+	GetBackendAlias(host string, uri string) string
+}
 type RegExpRoute struct {
 	RegExpStr    string
 	expr         *regexp.Regexp
@@ -45,12 +48,15 @@ type HttpAdapterServer struct {
 	backendLock    sync.RWMutex
 	routes         map[string][]RegExpRoute
 	routeLock      sync.RWMutex
+	routeFuncs     map[string]RouteFunc
+	routeFuncsLock sync.RWMutex
 }
 
 func NewHttpAdapterServer(listenAddr string, tlsCertFile, tlsKeyFile string, requestTimeout time.Duration) (*HttpAdapterServer, error) {
 	ret := &HttpAdapterServer{addr: listenAddr, tlsCertFile: tlsCertFile, tlsKeyFile: tlsKeyFile, requestTimeout: requestTimeout}
 	ret.backends = make(map[string]*iip.LoadBalanceClient)
 	ret.routes = make(map[string][]RegExpRoute)
+	ret.routeFuncs = make(map[string]RouteFunc)
 	return ret, nil
 }
 
@@ -83,6 +89,20 @@ func (m *HttpAdapterServer) getBackend(alias string) *iip.LoadBalanceClient {
 	ret, ok := m.backends[alias]
 	if ok {
 		return ret
+	}
+	return nil
+}
+
+func (m *HttpAdapterServer) RegisterRouteFunc(host string, fn RouteFunc) error {
+	if host == "" {
+		return fmt.Errorf("empty host")
+	}
+	m.routeFuncsLock.Lock()
+	defer m.routeFuncsLock.Unlock()
+	if fn != nil {
+		m.routeFuncs[host] = fn
+	} else {
+		delete(m.routeFuncs, host)
 	}
 	return nil
 }
@@ -169,7 +189,7 @@ func (m *HttpAdapterServer) RemoveRoute(host, regExp string) {
 	}
 }
 
-func (m *HttpAdapterServer) findRoute(host string, uri string) string {
+func (m *HttpAdapterServer) findRegExpRoute(host string, uri string) string {
 	m.routeLock.RLock()
 	defer m.routeLock.RUnlock()
 	hostRoute, ok := m.routes[host]
@@ -193,8 +213,20 @@ func (m *HttpAdapterServer) findRoute(host string, uri string) string {
 	return ""
 }
 
-func (m *HttpAdapterServer) findBackendFromRegexpRoute(host, uri string) *iip.LoadBalanceClient {
-	alias := m.findRoute(host, uri)
+func (m *HttpAdapterServer) findFuncRoute(host, uri string) string {
+	m.routeFuncsLock.RLock()
+	defer m.routeFuncsLock.RUnlock()
+	if fn, ok := m.routeFuncs[host]; ok {
+		return fn.GetBackendAlias(host, uri)
+	}
+	return ""
+}
+
+func (m *HttpAdapterServer) findBackend(host, uri string) *iip.LoadBalanceClient {
+	alias := m.findFuncRoute(host, uri)
+	if alias == "" {
+		alias = m.findRegExpRoute(host, uri)
+	}
 	if alias != "" {
 		return m.getBackend(alias)
 	}
@@ -203,7 +235,7 @@ func (m *HttpAdapterServer) findBackendFromRegexpRoute(host, uri string) *iip.Lo
 
 func (m *HttpAdapterServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	hostSeg := strings.Split(req.Host, ":")
-	backend := m.findBackendFromRegexpRoute(hostSeg[0], req.RequestURI)
+	backend := m.findBackend(hostSeg[0], req.RequestURI)
 	if backend == nil {
 		os.Stdout.WriteString("route not found\n")
 		w.WriteHeader(http.StatusNotImplemented)

@@ -68,9 +68,17 @@ func StartAdapterServer() {
 	if err := adapterServer.RegisterBackend("echo_server", httpadapter.IipBackendConfig{ServerList: ":9093#1,:9093#1", ServerKeepConns: 10, ServerMaxConns: 10}); err != nil {
 		panic(err.Error())
 	}
-	if err := adapterServer.PushRouteTail("localhost", "^/echo", "echo_server"); err != nil {
+
+	//test jsonexp route
+	jsonExpRoute, err := httpadapter.NewJsonExpRoute([]byte(routeJson), "route")
+	if err != nil {
 		panic(err.Error())
 	}
+	if err := adapterServer.RegisterRouteFunc("localhost", jsonExpRoute); err != nil {
+		panic(err.Error())
+	}
+
+	//test regexp route
 	if err := adapterServer.PushRouteTail("localhost", "^/http_header", "echo_server"); err != nil {
 		panic(err.Error())
 	}
@@ -78,3 +86,13 @@ func StartAdapterServer() {
 		panic(err.Error())
 	}
 }
+
+var routeJson = `{
+	"route": [
+		[
+			["$host", "=", "localhost"],
+			["$uri", "~", "/echo"],
+			["$iip_backend", "=", "echo_server"]
+		]
+	]
+}`
