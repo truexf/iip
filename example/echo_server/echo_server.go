@@ -63,6 +63,7 @@ func main() {
 		}
 	}()
 
+	iip.LogClosing = false
 	//start net/http server	for benchmark comparison
 	go startNetHttpServer()
 	//start http reverse proxy, so you can query iip server as a http server,use client tool by curl,etc
