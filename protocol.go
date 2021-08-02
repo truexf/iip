@@ -217,10 +217,22 @@ func (m *Channel) SendPacket(pkt *Packet) error {
 	if m.err != nil {
 		return fmt.Errorf("current channel is invalid, %s", m.err.Error())
 	}
+	err := m.sendPacket(pkt)
+	if err != nil {
+		log.Errorf("send packet fail, %s, close connection", err.Error())
+		m.Close(err)
+		m.conn.Close(err)
+	}
+	return err
+}
 
+func (m *Channel) sendPacket(pkt *Packet) error {
 	m.sendLock.Lock()
 	defer m.sendLock.Unlock()
 
+	if m.conn.err != nil {
+		return fmt.Errorf("connection was closed before,[%s]", m.conn.err.Error())
+	}
 	if pkt.Status == Status8 {
 		m.conn.tcpWriteQueue <- pkt
 		return nil
@@ -239,9 +251,9 @@ func (m *Channel) SendPacket(pkt *Packet) error {
 
 	if len(pkt.Data) <= int(MaxPacketSize) || pkt.DontChunk {
 		if m.conn.Role == RoleClient {
-			pkt.Status = 1
+			pkt.Status = StatusC1
 		} else if m.conn.Role == RoleServer {
-			pkt.Status = 5
+			pkt.Status = StatusS5
 		}
 		m.conn.tcpWriteQueue <- pkt
 
@@ -268,15 +280,15 @@ func (m *Channel) SendPacket(pkt *Packet) error {
 		if chunkSize == remainDataSize {
 			if m.conn.Role == RoleClient {
 				if firstSend {
-					chunk.Status = 1
+					chunk.Status = StatusC1
 				} else {
-					chunk.Status = 3
+					chunk.Status = StatusC3
 				}
 			} else if m.conn.Role == RoleServer {
 				if firstSend {
-					chunk.Status = 5
+					chunk.Status = StatusS5
 				} else {
-					chunk.Status = 7
+					chunk.Status = StatusS7
 				}
 			} else {
 				return fmt.Errorf("protocol error")
@@ -284,15 +296,15 @@ func (m *Channel) SendPacket(pkt *Packet) error {
 		} else if chunkSize < remainDataSize {
 			if m.conn.Role == RoleClient {
 				if firstSend {
-					chunk.Status = 0
+					chunk.Status = StatusC0
 				} else {
-					chunk.Status = 2
+					chunk.Status = StatusC2
 				}
 			} else if m.conn.Role == RoleServer {
 				if firstSend {
-					chunk.Status = 4
+					chunk.Status = StatusS4
 				} else {
-					chunk.Status = 6
+					chunk.Status = StatusS6
 				}
 			} else {
 				return fmt.Errorf("protocol error")
