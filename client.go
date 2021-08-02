@@ -471,7 +471,8 @@ func (m *EvaluatedClient) DoRequest(path string, request Request, timeout time.D
 	if ret, err := channel.DoRequest(path, request, timeout); err == nil {
 		return ret, err
 	} else {
-		channel.internalChannel.conn.Close(fmt.Errorf("client do request timeout"))
+		channel.Close(err)
+		channel.internalChannel.conn.Close(fmt.Errorf("client do request fail, %s", err.Error()))
 		return ret, fmt.Errorf("request [%s], %s", m.client.serverAddr, err.Error())
 	}
 }
@@ -567,7 +568,7 @@ func (m *LoadBalanceClient) DoRequest(path string, request Request, timeout time
 	if err != nil {
 		client.requestErrorCount++
 		if client.requestErrorCount > 5 {
-			log.Errorf("[%s] error 5+ times, paused", client.client.serverAddr)
+			log.Errorf("[%s] error 5+ times, paused, latest error: %s", client.client.serverAddr, err.Error())
 			client.paused = true
 		}
 	} else {
