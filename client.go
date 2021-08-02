@@ -334,10 +334,10 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 	if err := func() error {
 		m.sendRequestLock.Lock()
 		defer m.sendRequestLock.Unlock()
+		m.uncompletedRequestQueue.PushTail(request, true)
 		if err := m.internalChannel.SendPacket(pkt); err != nil {
+			m.uncompletedRequestQueue.PopTail(true)
 			return err
-		} else {
-			m.uncompletedRequestQueue.PushTail(request, true)
 		}
 		return nil
 	}(); err != nil {
@@ -388,10 +388,10 @@ func (m *ClientChannel) DoStreamRequest(path string, request Request) error {
 	}
 	m.sendRequestLock.Lock()
 	defer m.sendRequestLock.Unlock()
+	m.uncompletedRequestQueue.PushTail(request, true)
 	if err := m.internalChannel.SendPacket(pkt); err != nil {
+		m.uncompletedRequestQueue.PopTail(true)
 		return err
-	} else {
-		m.uncompletedRequestQueue.PushTail(request, true)
 	}
 
 	return nil
