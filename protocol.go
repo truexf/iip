@@ -578,6 +578,10 @@ func (m *Connection) Close(err error) {
 	}
 	defer func() {
 		m.closed = true
+		if m.tcpConn != nil {
+			m.tcpConn.Close()
+			m.tcpConn = nil
+		}
 	}()
 	if err != nil {
 		m.err = err
@@ -604,11 +608,6 @@ func (m *Connection) Close(err error) {
 	if m.closeNotify != nil {
 		close(m.closeNotify)
 		m.closeNotify = nil
-	}
-
-	if m.tcpConn != nil {
-		m.tcpConn.Close()
-		m.tcpConn = nil
 	}
 
 	//clean write chan
