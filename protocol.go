@@ -209,7 +209,7 @@ type Channel struct {
 	receivedQueue chan *Packet //received streamed packet from peer side
 	packetStatus  byte         //recent received packet status
 	closeNotify   chan int
-	closeLock     uint32
+	closedMark    uint32
 	Count         *Count
 }
 
@@ -483,10 +483,9 @@ func (m *Channel) handleClientLoop() {
 
 //关闭channel
 func (m *Channel) Close(err error) {
-	if !atomic.CompareAndSwapUint32(&m.closeLock, 0, 1) {
+	if !atomic.CompareAndSwapUint32(&m.closedMark, 0, 1) {
 		return
 	}
-	defer atomic.StoreUint32(&m.closeLock, 0)
 	// m.SendPacket(&Packet{Status: 8, ChannelId: m.Id, channel: m})
 	m.conn.removeChannel(m)
 	if err != nil {
@@ -517,9 +516,8 @@ type Connection struct {
 	tcpConn       net.Conn
 	tcpWriteQueue chan *Packet
 	closeNotify   chan int
-	closeLock     uint32
+	closedMark    uint32
 	Count         *Count
-	closed        bool
 }
 
 // 创建一个Connection对象，由Client或Server内部调用
@@ -569,6 +567,9 @@ func (m *Connection) writeLoop() {
 	for {
 		select {
 		case pkt := <-m.tcpWriteQueue:
+			if atomic.LoadUint32(&m.closedMark) == 1 {
+				return
+			}
 			m.tcpConn.SetWriteDeadline(time.Now().Add(time.Second * 3))
 			if _, err := WritePacket(pkt, m.tcpConn); err != nil {
 				m.Close(err)
@@ -581,15 +582,10 @@ func (m *Connection) writeLoop() {
 }
 
 func (m *Connection) Close(err error) {
-	if !atomic.CompareAndSwapUint32(&m.closeLock, 0, 1) {
-		return
-	}
-	defer atomic.StoreUint32(&m.closeLock, 0)
-	if m.closed {
+	if !atomic.CompareAndSwapUint32(&m.closedMark, 0, 1) {
 		return
 	}
 	defer func() {
-		m.closed = true
 		if m.tcpConn != nil {
 			m.tcpConn.Close()
 			m.tcpConn = nil
