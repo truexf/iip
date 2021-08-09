@@ -258,6 +258,7 @@ func (m *Client) newConnection() (*Connection, error) {
 func (m *Client) removeConnection(conn *Connection) {
 	m.connLock.Lock()
 	defer m.connLock.Unlock()
+	var ret *Connection = nil
 	for i, v := range m.connections {
 		if v == conn {
 			atomic.AddInt32(&m.connCount, -1)
@@ -266,9 +267,14 @@ func (m *Client) removeConnection(conn *Connection) {
 				conns = append(conns, m.connections[i+1:]...)
 			}
 			m.connections = conns
-			conn.Close(fmt.Errorf("from Client.removeConnection"))
-			return
+			ret = conn
+			break
 		}
+	}
+	m.connLock.Unlock()
+
+	if ret != nil {
+		ret.Close(fmt.Errorf("from Client.removeConnection"))
 	}
 }
 func (m *Client) getFreeConnection() (*Connection, error) {
