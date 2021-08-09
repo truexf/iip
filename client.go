@@ -257,7 +257,6 @@ func (m *Client) newConnection() (*Connection, error) {
 
 func (m *Client) removeConnection(conn *Connection) {
 	m.connLock.Lock()
-	defer m.connLock.Unlock()
 	var ret *Connection = nil
 	for i, v := range m.connections {
 		if v == conn {
