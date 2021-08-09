@@ -226,27 +226,25 @@ func (m *Channel) SendPacket(pkt *Packet) error {
 	return err
 }
 
+func (m *Channel) packetToSendQueue(pkt *Packet) error {
+	select {
+	case <-time.After(time.Second):
+		return fmt.Errorf("push packet to sendQueue timeout")
+	case m.conn.tcpWriteQueue <- pkt:
+		return nil
+	}
+}
+
 func (m *Channel) sendPacket(pkt *Packet) error {
 	m.sendLock.Lock()
 	defer m.sendLock.Unlock()
-
-	if m.conn.err != nil {
-		return fmt.Errorf("connection was closed before,[%s]", m.conn.err.Error())
+	if m.conn.Closed() {
+		return fmt.Errorf("connect is closed")
 	}
+
 	if pkt.Status == Status8 {
-		m.conn.tcpWriteQueue <- pkt
+		m.packetToSendQueue(pkt)
 		return nil
-	}
-
-	if m.conn.Role == RoleClient {
-		//after send request, set waiting for response timeout
-		defer func() {
-			readTimeout := m.conn.Client.config.TcpConnectTimeout
-			if readTimeout <= 0 {
-				readTimeout = time.Second * 5
-			}
-			m.conn.tcpConn.SetReadDeadline(time.Now().Add(readTimeout))
-		}()
 	}
 
 	if len(pkt.Data) <= int(MaxPacketSize) || pkt.DontChunk {
@@ -255,7 +253,7 @@ func (m *Channel) sendPacket(pkt *Packet) error {
 		} else if m.conn.Role == RoleServer {
 			pkt.Status = StatusS5
 		}
-		m.conn.tcpWriteQueue <- pkt
+		m.packetToSendQueue(pkt)
 
 		cnt := Count{PacketsSent: 1, WholePacketSent: 1}
 		m.Count.Add(cnt)
@@ -312,7 +310,7 @@ func (m *Channel) sendPacket(pkt *Packet) error {
 		} else {
 			return fmt.Errorf("protocol error")
 		}
-		m.conn.tcpWriteQueue <- chunk
+		m.packetToSendQueue(pkt)
 		cnt := Count{PacketsSent: 1}
 		m.Count.Add(cnt)
 		m.conn.Count.Add(cnt)
@@ -422,8 +420,13 @@ func (m *Channel) handleClientLoop() {
 	var pktWholeResponse *Packet
 	handler := m.GetCtxData(CtxClient).(*Client).handler
 	uncompletedReqQ := m.GetCtxData(CtxUncompletedRequestChan).(*goutil.LinkedList)
+	tkt := time.NewTicker(time.Second)
 	for {
 		select {
+		case <-tkt.C:
+			if m.conn.Closed() {
+				return
+			}
 		case <-m.closeNotify:
 			return
 		case pkt := <-m.receivedQueue:
@@ -563,11 +566,15 @@ func NewConnection(client *Client, server *Server, netConn net.Conn, role byte, 
 	return ret, nil
 }
 
+func (m *Connection) Closed() bool {
+	return atomic.LoadUint32(&m.closedMark) == 1
+}
+
 func (m *Connection) writeLoop() {
 	for {
 		select {
 		case pkt := <-m.tcpWriteQueue:
-			if atomic.LoadUint32(&m.closedMark) == 1 {
+			if m.Closed() {
 				return
 			}
 			m.tcpConn.SetWriteDeadline(time.Now().Add(time.Second * 3))
@@ -709,7 +716,7 @@ func (m *Connection) clientReadLoop() {
 	btsChannelId := make([]byte, 4)
 	btsDataLen := make([]byte, 4)
 	for {
-		if m.err != nil {
+		if m.Closed() {
 			break
 		}
 		//read status

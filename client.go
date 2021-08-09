@@ -48,11 +48,11 @@ type Client struct {
 
 func (m *Client) GetConnectionStatis() (respData []byte, e error) {
 	conns := make(map[int]*Connection)
-	m.connLock.Lock()
+	m.connLock.RLock()
 	for i, v := range m.connections {
 		conns[i] = v
 	}
-	m.connLock.Unlock()
+	m.connLock.RUnlock()
 
 	ret := make(map[int]*ConnectionSatis)
 	for i, v := range conns {
@@ -168,7 +168,7 @@ func (m *Client) newChannel(conn *Connection) (*ClientChannel, error) {
 	}
 	c.SetCtx(CtxUncompletedRequestChan, c.uncompletedRequestQueue)
 	c.SetCtx(CtxClient, m)
-	bts, err := c.DoRequest(PathNewChannel, NewDefaultRequest([]byte("{}")), time.Second*5)
+	bts, err := c.DoRequest(PathNewChannel, NewDefaultRequest([]byte("{}")), time.Second*1)
 	if err != nil {
 		return nil, fmt.Errorf("new sys channel fail, %s", err.Error())
 	}
@@ -305,8 +305,12 @@ func (m *Client) UnRegisterHandler(path string) {
 
 // 用于"消息式"请求/响应（系统自动将多个部分的响应数据合成为一个完整的响应，并通过这个阻塞的函数返回）
 func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Duration) ([]byte, error) {
-	if m.internalChannel != nil && m.internalChannel.err != nil {
-		return nil, fmt.Errorf("this channel is invalid, [%s]", m.internalChannel.err.Error())
+	if m.internalChannel != nil {
+		if m.internalChannel.err != nil || m.internalChannel.conn.Closed() {
+			return nil, fmt.Errorf("this channel is invalid, [%s]", m.internalChannel.err.Error())
+		}
+	} else {
+		return nil, fmt.Errorf("internal channl is nil")
 	}
 	if !ValidatePath(path) {
 		return nil, fmt.Errorf("invalid path of request: %s", path)
@@ -331,13 +335,20 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 		releaseNotifyChan(respChan)
 	}()
 
+	sendOk := false
 	if err := func() error {
 		m.sendRequestLock.Lock()
 		defer m.sendRequestLock.Unlock()
 		m.uncompletedRequestQueue.PushTail(request, true)
+		defer func() {
+			if !sendOk {
+				m.uncompletedRequestQueue.PopTail(true)
+			}
+		}()
 		if err := m.internalChannel.SendPacket(pkt); err != nil {
-			m.uncompletedRequestQueue.PopTail(true)
 			return err
+		} else {
+			sendOk = true
 		}
 		return nil
 	}(); err != nil {
@@ -345,7 +356,7 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 	}
 
 	if timeout <= 0 {
-		timeout = time.Second * 10
+		timeout = time.Second * 2
 	}
 
 	select {
@@ -363,13 +374,14 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 // 用于于流式请求/响应（用户自己注册处理Handler，每接收到一部分响应数据，系统会调用Handler一次，这个调用是异步的，发送函数立即返回）
 func (m *ClientChannel) DoStreamRequest(path string, request Request) error {
 	if m == nil {
-		time.Sleep(time.Second)
 		panic("client channel is nil")
 	}
 	if m.internalChannel != nil {
-		if m.internalChannel.err != nil {
+		if m.internalChannel.err != nil || m.internalChannel.conn.Closed() {
 			return fmt.Errorf("this channel is invalid, [%s]", m.internalChannel.err.Error())
 		}
+	} else {
+		return fmt.Errorf("internal channl is nil")
 	}
 	if !ValidatePath(path) {
 		return fmt.Errorf("invalid path: %s", path)
@@ -389,9 +401,16 @@ func (m *ClientChannel) DoStreamRequest(path string, request Request) error {
 	m.sendRequestLock.Lock()
 	defer m.sendRequestLock.Unlock()
 	m.uncompletedRequestQueue.PushTail(request, true)
+	sendOk := false
+	defer func() {
+		if !sendOk {
+			m.uncompletedRequestQueue.PopTail(true)
+		}
+	}()
 	if err := m.internalChannel.SendPacket(pkt); err != nil {
-		m.uncompletedRequestQueue.PopTail(true)
 		return err
+	} else {
+		sendOk = true
 	}
 
 	return nil
