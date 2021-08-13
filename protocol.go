@@ -341,8 +341,13 @@ func (m *Channel) sendPacket(pkt *Packet) error {
 func (m *Channel) handleServerLoop() {
 	var pktWholeRequest *Packet
 	handler := m.conn.GetCtxData(CtxServer).(*Server).handler
+	tkt := time.NewTicker(time.Second)
 	for {
 		select {
+		case <-tkt.C:
+			if m.conn.Closed() {
+				return
+			}
 		case <-m.closeNotify:
 			return
 		case pkt := <-m.receivedQueue:
@@ -796,6 +801,9 @@ func (m *Connection) serverReadLoop() {
 	btsChannelId := make([]byte, 4)
 	btsDataLen := make([]byte, 4)
 	for {
+		if m.Closed() {
+			break
+		}
 		if m.err != nil {
 			break
 		}
