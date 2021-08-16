@@ -17,6 +17,7 @@ type JsonExpRoute struct {
 	routeGroupName string
 }
 
+// Json expression route, see https://github.com/truexf/goutil/blob/master/jsonexp/README.md
 func NewJsonExpRoute(configJson []byte, routeJsonExpGroupName string) (*JsonExpRoute, error) {
 	if routeJsonExpGroupName == "" {
 		return nil, fmt.Errorf("routeJsonExpGroupName is empty")

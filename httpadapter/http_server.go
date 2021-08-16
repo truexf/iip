@@ -39,16 +39,16 @@ type RegExpRoute struct {
   将iip server的响应转换为http响应，并返回给客户端
 */
 type HttpAdapterServer struct {
-	httpServer     *http.Server
+	httpServer     *http.Server // net/http server for listening http requests
 	addr           string
 	tlsCertFile    string
 	tlsKeyFile     string
 	requestTimeout time.Duration
-	backends       map[string]*iip.LoadBalanceClient
+	backends       map[string]*iip.LoadBalanceClient //key: alias, value: iip-server loadbalance client
 	backendLock    sync.RWMutex
-	routes         map[string][]RegExpRoute
+	routes         map[string][]RegExpRoute //routes using reg-expressions, key: backend alias
 	routeLock      sync.RWMutex
-	routeFuncs     map[string]RouteFunc
+	routeFuncs     map[string]RouteFunc //routes using custom functions, key: backend alias
 	routeFuncsLock sync.RWMutex
 }
 
