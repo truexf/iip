@@ -94,7 +94,7 @@ func (m *Server) GetListener() net.Listener {
 
 func (m *Server) AddCount(path string, count Count) {
 	m.statisLock.RLock()
-	defer m.statisLock.RLock()
+	defer m.statisLock.RUnlock()
 	if cnt, ok := m.pathCount[path]; ok {
 		cnt.Add(count)
 		m.count.Add(count)
@@ -103,7 +103,7 @@ func (m *Server) AddCount(path string, count Count) {
 
 func (m *Server) AddMeasure(path string, reqCount int64, duration time.Duration) {
 	m.statisLock.RLock()
-	defer m.statisLock.RLock()
+	defer m.statisLock.RUnlock()
 	if me, ok := m.pathMeasure[path]; ok {
 		me.Add(reqCount, duration)
 		m.measure.Add(reqCount, duration)

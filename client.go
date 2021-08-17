@@ -540,7 +540,7 @@ func (m *LoadBalanceClient) getTaskClient() (*EvaluatedClient, error) {
 
 func (m *LoadBalanceClient) Status() string {
 	m.clientsLock.RLock()
-	defer m.clientsLock.RLock()
+	defer m.clientsLock.RUnlock()
 	ret := ""
 	for _, v := range m.activeClients {
 		ret += fmt.Sprintf("%s\n", v.client.serverAddr)
@@ -551,7 +551,7 @@ func (m *LoadBalanceClient) Status() string {
 func (m *LoadBalanceClient) GetConnectionStatis() ([]byte, error) {
 	retFinal := make(map[string]map[int]*ConnectionSatis)
 	m.clientsLock.RLock()
-	defer m.clientsLock.RLock()
+	defer m.clientsLock.RUnlock()
 	for _, ec := range m.activeClients {
 		c := ec.client
 		conns := make(map[int]*Connection)
