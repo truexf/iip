@@ -135,6 +135,7 @@ func (m *Server) acceptConn() (*Connection, error) {
 			tcpConn.SetWriteBuffer(m.config.TcpWriteBufferSize)
 		}
 
+		log.Logf("accepted new connection: %s", netConn.RemoteAddr().String())
 		if conn, err := NewConnection(nil, m, netConn, RoleServer, int(m.config.TcpWriteQueueLen)); err == nil {
 			m.connections[netConn.RemoteAddr().String()] = conn
 			conn.SetCtxData(CtxServer, m)
@@ -170,11 +171,11 @@ func (m *Server) Serve(listener net.Listener, isTls bool) error {
 			case <-m.closeNotify:
 				return
 			default:
-				if conn, err := m.acceptConn(); err != nil {
+				if _, err := m.acceptConn(); err != nil {
 					m.Stop(fmt.Errorf("accept connection fail, %s", err.Error()))
 					return
 				} else {
-					log.Logf("accepted new connection: %s", conn.tcpConn.RemoteAddr().String())
+					// log.Logf("accepted new connection: %s", conn.tcpConn.RemoteAddr().String())
 				}
 			}
 		}
