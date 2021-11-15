@@ -361,7 +361,7 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 	}
 
 	if timeout <= 0 {
-		timeout = time.Second * 2
+		timeout = time.Second * 3
 	}
 
 	select {
@@ -445,6 +445,11 @@ type EvaluatedClient struct {
 	requestErrorCount int
 	err               error
 	getChannelLock    sync.Mutex
+	pendingRequests   int64
+}
+
+func (m *EvaluatedClient) PendingRequests() int64 {
+	return atomic.LoadInt64(&m.pendingRequests)
 }
 
 func (m *EvaluatedClient) getTaskChannel() (*ClientChannel, error) {
@@ -484,6 +489,9 @@ func (m *EvaluatedClient) getTaskChannel() (*ClientChannel, error) {
 }
 
 func (m *EvaluatedClient) DoRequest(path string, request Request, timeout time.Duration) ([]byte, error) {
+	atomic.AddInt64(&m.pendingRequests, 1)
+	defer atomic.AddInt64(&m.pendingRequests, -1)
+
 	channel, err := m.getTaskChannel()
 	if err != nil {
 		m.err = err
@@ -516,6 +524,8 @@ func (m *LoadBalanceClient) getTaskClient() (*EvaluatedClient, error) {
 	defer m.clientsLock.RUnlock()
 	idx := m.idx
 	iterCnt := 0
+	var minN int64 = 0
+	var minC *EvaluatedClient = nil
 	for {
 		iterCnt++
 		idx++
@@ -523,19 +533,28 @@ func (m *LoadBalanceClient) getTaskClient() (*EvaluatedClient, error) {
 			idx = 0
 		}
 		m.idx = idx
-		if !m.activeClients[idx].paused {
-			return m.activeClients[idx], nil
-		} else {
-			if time.Since(m.activeClients[idx].lastRequest) > time.Second*5 {
-				return m.activeClients[idx], nil
+		if !m.activeClients[idx].paused || time.Since(m.activeClients[idx].lastRequest) > time.Second*5 {
+			if minC == nil {
+				minC = m.activeClients[idx]
+				minN = minC.PendingRequests()
+			} else {
+				pr := m.activeClients[idx].PendingRequests()
+				if minN > pr {
+					minC = m.activeClients[idx]
+					minN = pr
+				}
 			}
 		}
 		if iterCnt >= len(m.activeClients) {
 			break
 		}
 	}
-	log.Error("no alived client")
-	return nil, fmt.Errorf("no alived client")
+	if minC == nil {
+		log.Error("no alived client")
+		return nil, fmt.Errorf("no alived client")
+	} else {
+		return minC, nil
+	}
 }
 
 func (m *LoadBalanceClient) Status() string {
