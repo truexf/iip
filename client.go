@@ -544,6 +544,9 @@ func (m *LoadBalanceClient) getTaskClient() (*EvaluatedClient, error) {
 					minN = pr
 				}
 			}
+			if minN == 0 {
+				break
+			}
 		}
 		if iterCnt >= len(m.activeClients) {
 			break
@@ -565,6 +568,16 @@ func (m *LoadBalanceClient) Status() string {
 		ret += fmt.Sprintf("%s\n", v.client.serverAddr)
 	}
 	return ret
+}
+
+func (m *LoadBalanceClient) GetPendingRequests() ([]byte, error) {
+	ret := make(map[string]int64)
+	m.clientsLock.RLock()
+	defer m.clientsLock.RUnlock()
+	for _, ec := range m.activeClients {
+		ret[ec.client.serverAddr] += ec.PendingRequests()
+	}
+	return json.Marshal(ret)
 }
 
 func (m *LoadBalanceClient) GetConnectionStatis() ([]byte, error) {
