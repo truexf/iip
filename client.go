@@ -519,6 +519,18 @@ type LoadBalanceClient struct {
 	idx             int //当前轮转的server index
 }
 
+// close all connections & channels to the server
+func (m *LoadBalanceClient) CloseAll() {
+	m.clientsLock.Lock()
+	defer m.clientsLock.Unlock()
+
+	for _, v := range m.activeClients {
+		if v != nil && v.client != nil {
+			v.client.Close()
+		}
+	}
+}
+
 func (m *LoadBalanceClient) getTaskClient() (*EvaluatedClient, error) {
 	m.clientsLock.RLock()
 	defer m.clientsLock.RUnlock()
