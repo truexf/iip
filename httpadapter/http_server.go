@@ -80,7 +80,10 @@ func (m *HttpAdapterServer) RegisterBackend(alias string, config IipBackendConfi
 func (m *HttpAdapterServer) RemoveBackend(alias string) {
 	m.backendLock.Lock()
 	defer m.backendLock.Unlock()
-	delete(m.backends, alias)
+	if lbc, ok := m.backends[alias]; ok {
+		delete(m.backends, alias)
+		lbc.CloseAll()
+	}
 }
 
 func (m *HttpAdapterServer) getBackend(alias string) *iip.LoadBalanceClient {
