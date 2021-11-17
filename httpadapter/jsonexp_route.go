@@ -11,6 +11,13 @@ import (
 	"github.com/truexf/goutil/jsonexp"
 )
 
+const (
+	varHost       = "$host"
+	varUri        = "$uri"
+	varIIPBackend = "$iip_backend"
+	objQuery      = "$query"
+)
+
 type JsonExpRoute struct {
 	jeDict         *jsonexp.Dictionary
 	jeConfig       *jsonexp.Configuration
@@ -27,9 +34,9 @@ func NewJsonExpRoute(configJson []byte, routeJsonExpGroupName string) (*JsonExpR
 	if err != nil {
 		return nil, err
 	}
-	dict.RegisterVar("$host", nil)
-	dict.RegisterVar("$uri", nil)
-	dict.RegisterVar("$iip_backend", nil)
+	dict.RegisterVar(varHost, nil)
+	dict.RegisterVar(varUri, nil)
+	dict.RegisterVar(varIIPBackend, nil)
 	return &JsonExpRoute{jeDict: dict, jeConfig: conf, routeGroupName: routeJsonExpGroupName}, nil
 }
 
@@ -51,12 +58,12 @@ func (m UrlQueryParams) SetPropertyValue(property string, value interface{}, con
 func (m *JsonExpRoute) GetBackendAlias(host, uri string) string {
 	if g, ok := m.jeConfig.GetJsonExpGroup(m.routeGroupName); ok {
 		ctx := &jsonexp.DefaultContext{}
-		ctx.SetCtxData("$host", host)
-		ctx.SetCtxData("$uri", uri)
+		ctx.SetCtxData(varHost, host)
+		ctx.SetCtxData(varUri, uri)
 		if u, err := url.ParseRequestURI(uri); err == nil {
 			if urlValues, err := url.ParseQuery(u.RawQuery); err == nil {
 				params := make(UrlQueryParams)
-				m.jeDict.RegisterObject("$query", params)
+				m.jeDict.RegisterObject(objQuery, params)
 				for k, v := range urlValues {
 					if len(v) > 0 {
 						params[k] = v[0]
@@ -65,7 +72,7 @@ func (m *JsonExpRoute) GetBackendAlias(host, uri string) string {
 			}
 		}
 		if err := g.Execute(ctx); err == nil {
-			if ret, ok := ctx.GetCtxData("$iip_backend"); ok {
+			if ret, ok := ctx.GetCtxData(varIIPBackend); ok {
 				if retStr, ok := jsonexp.GetStringValue(ret); ok {
 					return retStr
 				}
