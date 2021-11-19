@@ -269,14 +269,14 @@ all timecount         : range1(%d,%d%%), range2(%d,%d%%), range3(%d,%d%%), range
 		req5 = 1
 	}
 
-	averageDur5 := dur5 / req5
+	// averageDur5 := dur5 / req5
 	reqAll := m.AllRequests
 	if reqAll <= 0 {
 		reqAll = 1
 	}
 	averageDurAll := m.AllDuration / reqAll
 
-	return fmt.Sprintf(ret, req5Ori, averageDur5/fTimeCountExceptOther/int64(timeUnit), m.AllRequests, averageDurAll/int64(timeUnit),
+	return fmt.Sprintf(ret, req5Ori, dur5/fTimeCountExceptOther/int64(timeUnit), m.AllRequests, averageDurAll/int64(timeUnit),
 		rangeCount1, rangeCount1*100/fTimeCount,
 		rangeCount2, rangeCount2*100/fTimeCount,
 		rangeCount3, rangeCount3*100/fTimeCount,
