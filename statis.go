@@ -260,6 +260,9 @@ all timecount         : range1(%d,%d%%), range2(%d,%d%%), range3(%d,%d%%), range
 	if fTimeCount == 0 {
 		fTimeCount = 1
 	}
+	if fTimeCountExceptOther == 0 {
+		fTimeCountExceptOther = 1
+	}
 
 	req5Ori := req5
 	if req5 <= 0 {
