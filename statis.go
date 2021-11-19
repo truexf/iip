@@ -253,6 +253,7 @@ all timecount         : range1(%d,%d%%), range2(%d,%d%%), range3(%d,%d%%), range
 
 	AllTimeCount := allRangeCount1 + allRangeCount2 + allRangeCount3 + allRangeCount4 + allRangeCount5 + allRangeCount6 + allRangeCount7 + allRangeCountOther
 	fTimeCount := rangeCount1 + rangeCount2 + rangeCount3 + rangeCount4 + rangeCount5 + rangeCount6 + rangeCount7 + rangeCountOther
+	fTimeCountExceptOther := rangeCount1 + rangeCount2 + rangeCount3 + rangeCount4 + rangeCount5 + rangeCount6 + rangeCount7
 	if AllTimeCount == 0 {
 		AllTimeCount = 1
 	}
@@ -272,7 +273,7 @@ all timecount         : range1(%d,%d%%), range2(%d,%d%%), range3(%d,%d%%), range
 	}
 	averageDurAll := m.AllDuration / reqAll
 
-	return fmt.Sprintf(ret, req5Ori, averageDur5/fTimeCount/int64(timeUnit), m.AllRequests, averageDurAll/int64(timeUnit),
+	return fmt.Sprintf(ret, req5Ori, averageDur5/fTimeCountExceptOther/int64(timeUnit), m.AllRequests, averageDurAll/int64(timeUnit),
 		rangeCount1, rangeCount1*100/fTimeCount,
 		rangeCount2, rangeCount2*100/fTimeCount,
 		rangeCount3, rangeCount3*100/fTimeCount,
