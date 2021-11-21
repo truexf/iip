@@ -174,8 +174,6 @@ func (m *Server) Serve(listener net.Listener, isTls bool) error {
 				if _, err := m.acceptConn(); err != nil {
 					m.Stop(fmt.Errorf("accept connection fail, %s", err.Error()))
 					return
-				} else {
-					// log.Logf("accepted new connection: %s", conn.tcpConn.RemoteAddr().String())
 				}
 			}
 		}
