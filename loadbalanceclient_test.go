@@ -39,7 +39,7 @@ func BenchmarkPFIIPBalanceClient(b *testing.B) {
 	echoData = strings.Repeat(echoData, 10)
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			bts, err := lbc.DoRequest("/echo_benchmark", NewDefaultRequest([]byte(echoData)), time.Second*3)
+			bts, err := lbc.DoRequest2("localhost", "/echo_benchmark", NewDefaultRequest([]byte(echoData)), time.Second*3)
 			if err != nil {
 				b.Fatalf(err.Error())
 			} else {
