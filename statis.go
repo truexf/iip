@@ -64,17 +64,32 @@ func EnsureTimeRangeSecond(duration int64) TimeRange {
 	return ensureTimeRangeDefault(ms)
 }
 
+type RangeStatis struct {
+	Duration int64
+	Count    int64
+}
+
+func (m *RangeStatis) Add(duration, count int64) {
+	atomic.AddInt64(&m.Duration, duration)
+	atomic.AddInt64(&m.Count, count)
+}
+
+func (m *RangeStatis) AddObj(rs RangeStatis) {
+	atomic.AddInt64(&m.Duration, rs.Duration)
+	atomic.AddInt64(&m.Count, rs.Count)
+}
+
 // 分区间统计
 type TimeCount struct {
 	sync.Mutex
-	RangeCount [8]int64 `json:"range_count"`
+	RangeCount [8]RangeStatis `json:"range_count"`
 }
 
 func (m *TimeCount) Clear() {
 	m.Lock()
 	defer m.Unlock()
 	for i := range m.RangeCount {
-		m.RangeCount[i] = 0
+		m.RangeCount[i] = RangeStatis{}
 	}
 }
 
@@ -87,21 +102,21 @@ func (m *TimeCount) Record(duration int64, ensureFunc EnsureTimeRangeFunc) {
 	r := ensureFunc(duration)
 	switch r {
 	case TimeRange1:
-		m.RangeCount[0] += 1
+		m.RangeCount[0].Add(duration, 1)
 	case TimeRange2:
-		m.RangeCount[1] += 1
+		m.RangeCount[1].Add(duration, 1)
 	case TimeRange3:
-		m.RangeCount[2] += 1
+		m.RangeCount[2].Add(duration, 1)
 	case TimeRange4:
-		m.RangeCount[3] += 1
+		m.RangeCount[3].Add(duration, 1)
 	case TimeRange5:
-		m.RangeCount[4] += 1
+		m.RangeCount[4].Add(duration, 1)
 	case TimeRange6:
-		m.RangeCount[5] += 1
+		m.RangeCount[5].Add(duration, 1)
 	case TimeRange7:
-		m.RangeCount[6] += 1
+		m.RangeCount[6].Add(duration, 1)
 	default:
-		m.RangeCount[7] += 1
+		m.RangeCount[7].Add(duration, 1)
 	}
 
 }
@@ -197,41 +212,41 @@ func (m *Measure) String(timeUnit time.Duration) string {
 	ret := `
 5 minute requests     : %d, average duration: %d
 all requests          : %d, average duration: %d
-5 minute timecount    : range1(%d,%d%%), range2(%d,%d%%), range3(%d,%d%%), range4(%d,%d%%), range5(%d,%d%%), range6(%d,%d%%), range7(%d,%d%%), other(%d,%d%%)
-all timecount         : range1(%d,%d%%), range2(%d,%d%%), range3(%d,%d%%), range4(%d,%d%%), range5(%d,%d%%), range6(%d,%d%%), range7(%d,%d%%), other(%d,%d%%)
+5 minute timecount    : range1(%d,%d%%, average %d), range2(%d,%d%%, average %d), range3(%d,%d%%, average %d), range4(%d,%d%%, average %d), range5(%d,%d%%, average %d), range6(%d,%d%%, average %d), range7(%d,%d%%, average %d), other(%d,%d%%, average %d)
+all timecount         : range1(%d,%d%%, average %d), range2(%d,%d%%, average %d), range3(%d,%d%%, average %d), range4(%d,%d%%, average %d), range5(%d,%d%%, average %d), range6(%d,%d%%, average %d), range7(%d,%d%%, average %d), other(%d,%d%%, average %d)
 `
 	idx := m.currentSecond
 	var dur5 int64
 	var req5 int64
-	var rangeCount1 int64 = 0
-	var rangeCount2 int64 = 0
-	var rangeCount3 int64 = 0
-	var rangeCount4 int64 = 0
-	var rangeCount5 int64 = 0
-	var rangeCount6 int64 = 0
-	var rangeCount7 int64 = 0
-	var rangeCountOther int64 = 0
-	var allRangeCount1 int64 = 0
-	var allRangeCount2 int64 = 0
-	var allRangeCount3 int64 = 0
-	var allRangeCount4 int64 = 0
-	var allRangeCount5 int64 = 0
-	var allRangeCount6 int64 = 0
-	var allRangeCount7 int64 = 0
-	var allRangeCountOther int64 = 0
+	var rangeCount1 RangeStatis
+	var rangeCount2 RangeStatis
+	var rangeCount3 RangeStatis
+	var rangeCount4 RangeStatis
+	var rangeCount5 RangeStatis
+	var rangeCount6 RangeStatis
+	var rangeCount7 RangeStatis
+	var rangeCountOther RangeStatis
+	var allRangeCount1 RangeStatis
+	var allRangeCount2 RangeStatis
+	var allRangeCount3 RangeStatis
+	var allRangeCount4 RangeStatis
+	var allRangeCount5 RangeStatis
+	var allRangeCount6 RangeStatis
+	var allRangeCount7 RangeStatis
+	var allRangeCountOther RangeStatis
 
 	for i := 0; i < 300; i++ {
 		dur5 += m.FiveMinuteDuration[idx]
 		req5 += m.FiveMinuteRequests[idx]
 		m.FiveMinuteTimeCount[idx].Lock()
-		rangeCount1 += m.FiveMinuteTimeCount[idx].RangeCount[0]
-		rangeCount2 += m.FiveMinuteTimeCount[idx].RangeCount[1]
-		rangeCount3 += m.FiveMinuteTimeCount[idx].RangeCount[2]
-		rangeCount4 += m.FiveMinuteTimeCount[idx].RangeCount[3]
-		rangeCount5 += m.FiveMinuteTimeCount[idx].RangeCount[4]
-		rangeCount6 += m.FiveMinuteTimeCount[idx].RangeCount[5]
-		rangeCount7 += m.FiveMinuteTimeCount[idx].RangeCount[6]
-		rangeCountOther += m.FiveMinuteTimeCount[idx].RangeCount[7]
+		rangeCount1.AddObj(m.FiveMinuteTimeCount[idx].RangeCount[0])
+		rangeCount2.AddObj(m.FiveMinuteTimeCount[idx].RangeCount[1])
+		rangeCount3.AddObj(m.FiveMinuteTimeCount[idx].RangeCount[2])
+		rangeCount4.AddObj(m.FiveMinuteTimeCount[idx].RangeCount[3])
+		rangeCount5.AddObj(m.FiveMinuteTimeCount[idx].RangeCount[4])
+		rangeCount6.AddObj(m.FiveMinuteTimeCount[idx].RangeCount[5])
+		rangeCount7.AddObj(m.FiveMinuteTimeCount[idx].RangeCount[6])
+		rangeCountOther.AddObj(m.FiveMinuteTimeCount[idx].RangeCount[7])
 		m.FiveMinuteTimeCount[idx].Unlock()
 
 		idx++
@@ -241,27 +256,23 @@ all timecount         : range1(%d,%d%%), range2(%d,%d%%), range3(%d,%d%%), range
 	}
 
 	m.AllTimeCount.Lock()
-	allRangeCount1 += m.AllTimeCount.RangeCount[0]
-	allRangeCount2 += m.AllTimeCount.RangeCount[1]
-	allRangeCount3 += m.AllTimeCount.RangeCount[2]
-	allRangeCount4 += m.AllTimeCount.RangeCount[3]
-	allRangeCount5 += m.AllTimeCount.RangeCount[4]
-	allRangeCount6 += m.AllTimeCount.RangeCount[5]
-	allRangeCount7 += m.AllTimeCount.RangeCount[6]
-	allRangeCountOther += m.AllTimeCount.RangeCount[7]
+	allRangeCount1.AddObj(m.AllTimeCount.RangeCount[0])
+	allRangeCount2.AddObj(m.AllTimeCount.RangeCount[1])
+	allRangeCount3.AddObj(m.AllTimeCount.RangeCount[2])
+	allRangeCount4.AddObj(m.AllTimeCount.RangeCount[3])
+	allRangeCount5.AddObj(m.AllTimeCount.RangeCount[4])
+	allRangeCount6.AddObj(m.AllTimeCount.RangeCount[5])
+	allRangeCount7.AddObj(m.AllTimeCount.RangeCount[6])
+	allRangeCountOther.AddObj(m.AllTimeCount.RangeCount[7])
 	m.AllTimeCount.Unlock()
 
-	AllTimeCount := allRangeCount1 + allRangeCount2 + allRangeCount3 + allRangeCount4 + allRangeCount5 + allRangeCount6 + allRangeCount7 + allRangeCountOther
-	fTimeCount := rangeCount1 + rangeCount2 + rangeCount3 + rangeCount4 + rangeCount5 + rangeCount6 + rangeCount7 + rangeCountOther
-	fTimeCountExceptOther := rangeCount1 + rangeCount2 + rangeCount3 + rangeCount4 + rangeCount5 + rangeCount6 + rangeCount7
+	AllTimeCount := allRangeCount1.Count + allRangeCount2.Count + allRangeCount3.Count + allRangeCount4.Count + allRangeCount5.Count + allRangeCount6.Count + allRangeCount7.Count + allRangeCountOther.Count
+	fTimeCount := rangeCount1.Count + rangeCount2.Count + rangeCount3.Count + rangeCount4.Count + rangeCount5.Count + rangeCount6.Count + rangeCount7.Count + rangeCountOther.Count
 	if AllTimeCount == 0 {
 		AllTimeCount = 1
 	}
 	if fTimeCount == 0 {
 		fTimeCount = 1
-	}
-	if fTimeCountExceptOther == 0 {
-		fTimeCountExceptOther = 1
 	}
 
 	req5Ori := req5
@@ -276,24 +287,25 @@ all timecount         : range1(%d,%d%%), range2(%d,%d%%), range3(%d,%d%%), range
 	}
 	averageDurAll := m.AllDuration / reqAll
 
-	return fmt.Sprintf(ret, req5Ori, dur5/fTimeCountExceptOther/int64(timeUnit), m.AllRequests, averageDurAll/int64(timeUnit),
-		rangeCount1, rangeCount1*100/fTimeCount,
-		rangeCount2, rangeCount2*100/fTimeCount,
-		rangeCount3, rangeCount3*100/fTimeCount,
-		rangeCount4, rangeCount4*100/fTimeCount,
-		rangeCount5, rangeCount5*100/fTimeCount,
-		rangeCount6, rangeCount6*100/fTimeCount,
-		rangeCount7, rangeCount7*100/fTimeCount,
-		rangeCountOther, rangeCountOther*100/fTimeCount,
+	return fmt.Sprintf(ret, req5Ori, dur5/fTimeCount/int64(timeUnit), m.AllRequests, averageDurAll/int64(timeUnit),
+		rangeCount1.Count, rangeCount1.Count*100/fTimeCount, rangeCount1.Duration/rangeCount1.Count,
+		rangeCount2.Count, rangeCount2.Count*100/fTimeCount, rangeCount2.Duration/rangeCount2.Count,
+		rangeCount3.Count, rangeCount3.Count*100/fTimeCount, rangeCount3.Duration/rangeCount3.Count,
+		rangeCount4.Count, rangeCount4.Count*100/fTimeCount, rangeCount4.Duration/rangeCount4.Count,
+		rangeCount5.Count, rangeCount5.Count*100/fTimeCount, rangeCount5.Duration/rangeCount5.Count,
+		rangeCount6.Count, rangeCount6.Count*100/fTimeCount, rangeCount6.Duration/rangeCount6.Count,
+		rangeCount7.Count, rangeCount7.Count*100/fTimeCount, rangeCount7.Duration/rangeCount7.Count,
+		rangeCountOther.Count, rangeCountOther.Count*100/fTimeCount, rangeCountOther.Duration/rangeCountOther.Count,
 
-		allRangeCount1, allRangeCount1*100/AllTimeCount,
-		allRangeCount2, allRangeCount2*100/AllTimeCount,
-		allRangeCount3, allRangeCount3*100/AllTimeCount,
-		allRangeCount4, allRangeCount4*100/AllTimeCount,
-		allRangeCount5, allRangeCount5*100/AllTimeCount,
-		allRangeCount6, allRangeCount6*100/AllTimeCount,
-		allRangeCount7, allRangeCount7*100/AllTimeCount,
-		allRangeCountOther, allRangeCountOther*100/AllTimeCount)
+		allRangeCount1.Count, allRangeCount1.Count*100/AllTimeCount, rangeCount1.Duration/rangeCount1.Count,
+		allRangeCount2.Count, allRangeCount2.Count*100/AllTimeCount, rangeCount2.Duration/rangeCount2.Count,
+		allRangeCount3.Count, allRangeCount3.Count*100/AllTimeCount, rangeCount3.Duration/rangeCount3.Count,
+		allRangeCount4.Count, allRangeCount4.Count*100/AllTimeCount, rangeCount4.Duration/rangeCount4.Count,
+		allRangeCount5.Count, allRangeCount5.Count*100/AllTimeCount, rangeCount5.Duration/rangeCount5.Count,
+		allRangeCount6.Count, allRangeCount6.Count*100/AllTimeCount, rangeCount6.Duration/rangeCount6.Count,
+		allRangeCount7.Count, allRangeCount7.Count*100/AllTimeCount, rangeCount7.Duration/rangeCount7.Count,
+		allRangeCountOther.Count, allRangeCountOther.Count*100/AllTimeCount, rangeCountOther.Duration/rangeCountOther.Count,
+	)
 }
 
 type Count struct {
