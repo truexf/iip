@@ -287,24 +287,31 @@ all timecount         : range1(%d,%d%%, average %d), range2(%d,%d%%, average %d)
 	}
 	averageDurAll := m.AllDuration / reqAll
 
-	return fmt.Sprintf(ret, req5Ori, dur5/fTimeCount/int64(timeUnit), m.AllRequests, averageDurAll/int64(timeUnit),
-		rangeCount1.Count, rangeCount1.Count*100/fTimeCount, rangeCount1.Duration/rangeCount1.Count,
-		rangeCount2.Count, rangeCount2.Count*100/fTimeCount, rangeCount2.Duration/rangeCount2.Count,
-		rangeCount3.Count, rangeCount3.Count*100/fTimeCount, rangeCount3.Duration/rangeCount3.Count,
-		rangeCount4.Count, rangeCount4.Count*100/fTimeCount, rangeCount4.Duration/rangeCount4.Count,
-		rangeCount5.Count, rangeCount5.Count*100/fTimeCount, rangeCount5.Duration/rangeCount5.Count,
-		rangeCount6.Count, rangeCount6.Count*100/fTimeCount, rangeCount6.Duration/rangeCount6.Count,
-		rangeCount7.Count, rangeCount7.Count*100/fTimeCount, rangeCount7.Duration/rangeCount7.Count,
-		rangeCountOther.Count, rangeCountOther.Count*100/fTimeCount, rangeCountOther.Duration/rangeCountOther.Count,
+	ifZero := func(v int64) int64 {
+		if v == 0 {
+			return 1
+		}
+		return v
+	}
 
-		allRangeCount1.Count, allRangeCount1.Count*100/AllTimeCount, rangeCount1.Duration/rangeCount1.Count,
-		allRangeCount2.Count, allRangeCount2.Count*100/AllTimeCount, rangeCount2.Duration/rangeCount2.Count,
-		allRangeCount3.Count, allRangeCount3.Count*100/AllTimeCount, rangeCount3.Duration/rangeCount3.Count,
-		allRangeCount4.Count, allRangeCount4.Count*100/AllTimeCount, rangeCount4.Duration/rangeCount4.Count,
-		allRangeCount5.Count, allRangeCount5.Count*100/AllTimeCount, rangeCount5.Duration/rangeCount5.Count,
-		allRangeCount6.Count, allRangeCount6.Count*100/AllTimeCount, rangeCount6.Duration/rangeCount6.Count,
-		allRangeCount7.Count, allRangeCount7.Count*100/AllTimeCount, rangeCount7.Duration/rangeCount7.Count,
-		allRangeCountOther.Count, allRangeCountOther.Count*100/AllTimeCount, rangeCountOther.Duration/rangeCountOther.Count,
+	return fmt.Sprintf(ret, req5Ori, dur5/fTimeCount/int64(timeUnit), m.AllRequests, averageDurAll/int64(timeUnit),
+		rangeCount1.Count, rangeCount1.Count*100/fTimeCount, rangeCount1.Duration/ifZero(rangeCount1.Count)/int64(timeUnit),
+		rangeCount2.Count, rangeCount2.Count*100/fTimeCount, rangeCount2.Duration/ifZero(rangeCount2.Count)/int64(timeUnit),
+		rangeCount3.Count, rangeCount3.Count*100/fTimeCount, rangeCount3.Duration/ifZero(rangeCount3.Count)/int64(timeUnit),
+		rangeCount4.Count, rangeCount4.Count*100/fTimeCount, rangeCount4.Duration/ifZero(rangeCount4.Count)/int64(timeUnit),
+		rangeCount5.Count, rangeCount5.Count*100/fTimeCount, rangeCount5.Duration/ifZero(rangeCount5.Count)/int64(timeUnit),
+		rangeCount6.Count, rangeCount6.Count*100/fTimeCount, rangeCount6.Duration/ifZero(rangeCount6.Count)/int64(timeUnit),
+		rangeCount7.Count, rangeCount7.Count*100/fTimeCount, rangeCount7.Duration/ifZero(rangeCount7.Count)/int64(timeUnit),
+		rangeCountOther.Count, rangeCountOther.Count*100/fTimeCount, rangeCountOther.Duration/ifZero(rangeCountOther.Count)/int64(timeUnit),
+
+		allRangeCount1.Count, allRangeCount1.Count*100/AllTimeCount, rangeCount1.Duration/ifZero(allRangeCount1.Count)/int64(timeUnit),
+		allRangeCount2.Count, allRangeCount2.Count*100/AllTimeCount, rangeCount2.Duration/ifZero(allRangeCount2.Count)/int64(timeUnit),
+		allRangeCount3.Count, allRangeCount3.Count*100/AllTimeCount, rangeCount3.Duration/ifZero(allRangeCount3.Count)/int64(timeUnit),
+		allRangeCount4.Count, allRangeCount4.Count*100/AllTimeCount, rangeCount4.Duration/ifZero(allRangeCount4.Count)/int64(timeUnit),
+		allRangeCount5.Count, allRangeCount5.Count*100/AllTimeCount, rangeCount5.Duration/ifZero(allRangeCount5.Count)/int64(timeUnit),
+		allRangeCount6.Count, allRangeCount6.Count*100/AllTimeCount, rangeCount6.Duration/ifZero(allRangeCount6.Count)/int64(timeUnit),
+		allRangeCount7.Count, allRangeCount7.Count*100/AllTimeCount, rangeCount7.Duration/ifZero(allRangeCount7.Count)/int64(timeUnit),
+		allRangeCountOther.Count, allRangeCountOther.Count*100/AllTimeCount, rangeCountOther.Duration/ifZero(allRangeCountOther.Count)/int64(timeUnit),
 	)
 }
 
