@@ -362,8 +362,10 @@ func (m *ClientChannel) DoRequest(path string, request Request, timeout time.Dur
 		timeout = time.Second * 3
 	}
 
+	tmr := goutil.AcquireTimer(timeout)
+	defer goutil.ReleaseTimer(tmr)
 	select {
-	case <-time.After(timeout):
+	case <-tmr.C:
 		return nil, ErrRequestTimeout
 	case resp := <-respChan:
 		if resp != nil {

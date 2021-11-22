@@ -154,9 +154,11 @@ func (m *Measure) SetTimeRangeFunc(v EnsureTimeRangeFunc) {
 	}
 }
 func (m *Measure) tickTack() {
+	ticker := time.NewTicker(time.Millisecond * 100)
+	defer ticker.Stop()
 	tm := time.Now().Second()
 	for {
-		<-time.After(time.Millisecond * 100)
+		<-ticker.C
 		tmNow := time.Now().Second()
 		idx := m.currentSecond
 		if tmNow != tm {

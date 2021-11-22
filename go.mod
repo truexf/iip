@@ -2,4 +2,4 @@ module github.com/truexf/iip
 
 go 1.15
 
-require github.com/truexf/goutil v1.2.3
+require github.com/truexf/goutil v1.4.6
