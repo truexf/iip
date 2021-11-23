@@ -1,7 +1,7 @@
 [![GoDoc](https://godoc.org/github.com/truexf/iip?status.svg)](http://godoc.org/github.com/truexf/iip) 
 
 ## IIP是什么？ 
-基于TCP的基础通讯协议及框架(IIP,Internal Interaction Protocol),该协议可作为RPC接口调用的底层协议，如同http2之于gRPC，本项目基于该协议实现了client/server的基础框架。
+基于TCP的多路复用的基础通讯协议及框架(IIP,Internal Interaction Protocol),该协议可作为RPC接口调用的底层协议，如同http2之于gRPC，本项目基于该协议实现了client/server的基础框架。
 
 ## 使用说明
 * echo回显client示例: [example/echo_client/echo_client.go](https://github.com/truexf/iip/blob/master/example/echo_client/echo_client.go)
@@ -43,6 +43,9 @@ BenchmarkPFIIPBalanceClient-8   	   36670	    305865 ns/op	   84436 B/op	      1
 ```
 
 ## 典型案例 
+一个靠谱的底层通讯框架组件，必然是基于一个真实生产系统，伴随着该系统的成长迭代，历史思考和实践基础上抽象发展而成。一个反面的例子github上有很多鱼目混珠的依靠集成各大开源代码而来的“集成系统”，号称“best”的推广宣传，几千star数，鱼目混珠的不少，实在太不靠谱，但是能真正鉴别的人有几何？  
+
+IIP基于以下真实的流量交易平台,集作者多年一线流量平台设计开发实践，抽象而出：  
  ![image](https://github.com/truexf/iip/blob/master/usecase/baixun.png)  
 [百寻广告流量交易平台](https://www.bxadsite.com/)日处理数十亿次广告流量请求,峰值qps 4w+, 采用iip承载其内部核心交易系统的微服务。
 
