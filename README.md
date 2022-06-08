@@ -46,7 +46,7 @@ BenchmarkPFIIPBalanceClient-8   	   36670	    305865 ns/op	   84436 B/op	      1
 一个靠谱的底层通讯框架组件，必然是基于一个真实生产系统，伴随着该系统的成长迭代，历史思考和实践基础上抽象发展而成。
 
  ![image](https://github.com/truexf/iip/blob/master/usecase/baixun.png)  
-[百寻广告流量交易平台](https://www.bxadsite.com/)日处理数十亿次广告流量请求,峰值qps 4w+, 采用iip承载其内部核心交易系统的微服务。
+[百寻广告流量交易平台](https://www.adxliangmei.com/)日处理数十亿次广告流量请求,峰值qps 4w+, 采用iip承载其内部核心交易系统的微服务。
 
 ## IIP架构 
  ![image](https://github.com/truexf/iip/blob/master/iip.jpg)  
