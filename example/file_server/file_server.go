@@ -30,7 +30,7 @@ type FileServer struct {
 }
 
 func (m *FileServer) Handle(path string, queryParams url.Values, requestData []byte, requestDataCompleted bool) ([]byte, error) {
-	fmt.Printf("request: %s\n", string(requestData))
+	fmt.Printf("request: %s\n", goutil.UnsafeBytesToString(requestData))
 	if !requestDataCompleted {
 		return nil, nil
 	}

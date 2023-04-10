@@ -155,7 +155,7 @@ func (m *FileUploadClient) RunTask(task *FileUploadTaskClientSide) error {
 }
 
 func (m *FileUploadClient) Handle(path string, request iip.Request, responseData []byte, dataCompleted bool) error {
-	fmt.Printf("received response(%d bytes): %s\n", len(responseData), string(responseData))
+	fmt.Printf("received response(%d bytes): %s\n", len(responseData), goutil.UnsafeBytesToString(responseData))
 	if !dataCompleted {
 		return nil
 	}

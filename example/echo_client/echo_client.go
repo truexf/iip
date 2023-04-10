@@ -2,13 +2,14 @@
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
-//echo client
+// echo client
 package main
 
 import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/truexf/goutil"
 	"os"
 	"time"
 
@@ -19,7 +20,7 @@ type EchoClientHandler struct {
 }
 
 func (m *EchoClientHandler) Handle(path string, request iip.Request, responseData []byte, dataCompleted bool) error {
-	fmt.Printf("response in handler: %s\n for request: %s\n", string(responseData), string(request.Data()))
+	fmt.Printf("response in handler: %s\n for request: %s\n", goutil.UnsafeBytesToString(responseData), string(request.Data()))
 
 	return nil
 }
@@ -110,7 +111,7 @@ func main() {
 		if err != nil {
 			fmt.Println(err.Error())
 		} else {
-			fmt.Printf("response ret: %s\n", string(response))
+			fmt.Printf("response ret: %s\n", goutil.UnsafeBytesToString(response))
 		}
 		fmt.Println("input some words:")
 	}

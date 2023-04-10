@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
-//服务器实现
+// 服务器实现
 package iip
 
 import (
@@ -10,6 +10,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/truexf/goutil"
 	"net"
 	"net/url"
 	"sync"
@@ -213,7 +214,7 @@ func (m *Server) StartListenTLS(certFile, keyFile string) error {
 	return nil
 }
 
-//stop server
+// stop server
 func (m *Server) Stop(err error) {
 	close(m.closeNotify)
 	if err != nil {
@@ -329,7 +330,7 @@ func (m *Server) Handle(path string, queryParams url.Values, requestData []byte,
 		}
 		m.statisLock.RLock()
 		defer m.statisLock.RUnlock()
-		if cnt, ok := m.pathCount[string(requestData)]; ok {
+		if cnt, ok := m.pathCount[goutil.UnsafeBytesToString(requestData)]; ok {
 			return json.Marshal(cnt)
 		}
 	case PathServerPathMeasureJson:
@@ -338,7 +339,7 @@ func (m *Server) Handle(path string, queryParams url.Values, requestData []byte,
 		}
 		m.statisLock.RLock()
 		defer m.statisLock.RUnlock()
-		if ms, ok := m.pathMeasure[string(requestData)]; ok {
+		if ms, ok := m.pathMeasure[goutil.UnsafeBytesToString(requestData)]; ok {
 			return ms.Json(), nil
 		}
 	case PathServerStatis:

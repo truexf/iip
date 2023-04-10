@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/truexf/goutil"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -40,7 +41,7 @@ func BenchmarkBMHttpAdapter(t *testing.B) {
 			t.Fatalf(err.Error())
 		}
 		if !bytes.Equal(bts, ret) {
-			t.Fatalf("request response not equal\n%s\n%s\n", string(bts), string(ret))
+			t.Fatalf("request response not equal\n%s\n%s\n", goutil.UnsafeBytesToString(bts), goutil.UnsafeBytesToString(ret))
 		}
 	}
 }
@@ -58,7 +59,7 @@ func TestHttpAdapter(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	if !bytes.Equal(bts, ret) {
-		t.Fatalf("request response not equal\n%s\n%s\n", string(bts), string(ret))
+		t.Fatalf("request response not equal\n%s\n%s\n", goutil.UnsafeBytesToString(bts), goutil.UnsafeBytesToString(ret))
 	}
 
 	//test httpheader adapter

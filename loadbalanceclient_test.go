@@ -7,6 +7,7 @@ package iip
 import (
 	"flag"
 	"fmt"
+	"github.com/truexf/goutil"
 	"strings"
 	"testing"
 	"time"
@@ -43,7 +44,7 @@ func BenchmarkPFIIPBalanceClient(b *testing.B) {
 			if err != nil {
 				b.Fatalf(err.Error())
 			} else {
-				if string(bts) != echoData {
+				if goutil.UnsafeBytesToString(bts) != echoData {
 					b.Fatalf("not equal")
 				}
 			}
